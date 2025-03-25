@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Image Converter</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Image Converter</h1>
+        <form id="convertForm" enctype="multipart/form-data">
+            <div class="file-upload">
+                <input type="file" id="imageInput" name="image" accept=".jpg,.jpeg,.png,.webp" required>
+                <label for="imageInput" class="file-upload-label">Choose Image</label>
+                <div id="image-preview" class="image-preview">
+                    <img id="preview-img" src="" alt="Image Preview" style="display: none;">
+                    <p id="preview-text">No file chosen</p>
+                </div>
+            </div>
+            <select id="conversionType" name="conversion" required>
+                <option value="jpg_to_png">JPEG to PNG</option>
+                <option value="png_to_jpg">PNG to JPEG</option>
+                <option value="png_to_webp">PNG to WebP</option>
+                <option value="webp_to_png">WebP to PNG</option>
+            </select>
+            <input type="submit" value="Convert">
+        </form>
+        <div id="downloadLink" style="display: none; margin-top: 15px;">
+            <a href="#" id="downloadBtn" class="download-button">Download Converted Image</a>
+        </div>
+    </div>
+    <script>
+        document.getElementById('imageInput').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            const previewImg = document.getElementById('preview-img');
+            const previewText = document.getElementById('preview-text');
+
+            if (file) {
+                const reader = new FileReader();
+
+                reader.onload = function(e) {
+                    previewImg.src = e.target.result;
+                    previewImg.style.display = 'block';
+                    previewText.style.display = 'none';
+                }
+
+                reader.readAsDataURL(file);
+            } else {
+                previewImg.style.display = 'none';
+                previewText.style.display = 'block';
+                previewText.textContent = 'No file chosen';
+            }
+        });
+
+        document.getElementById('convertForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            const formData = new FormData(this);
+
+            fetch('/convert', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.blob())
+            .then(blob => {
+                // Create a download link
+                const downloadLink = document.getElementById('downloadLink');
+                const downloadBtn = document.getElementById('downloadBtn');
+
+                const url = window.URL.createObjectURL(blob);
+                downloadBtn.href = url;
+
+                // Determine file extension based on conversion type
+                const conversionType = document.getElementById('conversionType').value;
+                const extensionMap = {
+                    'jpg_to_png': '.png',
+                    'png_to_jpg': '.jpg',
+                    'png_to_webp': '.webp',
+                    'webp_to_png': '.png'
+                };
+                const fileExtension = extensionMap[conversionType] || '.converted';
+
+                // Set download attribute with original filename and new extension
+                const originalFileName = document.getElementById('imageInput').files[0].name;
+                const newFileName = originalFileName.replace(/\.[^/.]+$/, '') + fileExtension;
+                downloadBtn.download = newFileName;
+
+                // Show download link
+                downloadLink.style.display = 'block';
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Conversion failed. Please try again.');
+            });
+        });
+    </script>
+</body>
+</html>
