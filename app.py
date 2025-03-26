@@ -67,7 +67,6 @@ def convert_image():
         return "No file part", 400
 
     file = request.files['image']
-    local_conversion_type = request.form['conversion']
 
     if file.filename == '':
         return "No selected file", 400
@@ -78,8 +77,12 @@ def convert_image():
         file.save(filepath)
 
         try:
+            input_format = request.form['input_format']
+            output_format = request.form['output_format']
+            conversion_type = f"{input_format}_to_{output_format}"
+
             # Perform the conversion using the factory
-            converted_filepath = ConverterFactory.convert(local_conversion_type, filepath)
+            converted_filepath = ConverterFactory.convert(conversion_type, filepath)
 
             # Determine the appropriate MIME type and file extension
             mime_types = {
@@ -114,9 +117,9 @@ def convert_image():
             # Return the file as a downloadable attachment
             return send_file(
                 io.BytesIO(file_bytes),
-                mimetype=mime_types.get(local_conversion_type, 'application/octet-stream'),
+                mimetype=mime_types.get(conversion_type, 'application/octet-stream'),
                 as_attachment=True,
-                download_name=f'converted_image{get_extension(local_conversion_type)}'
+                download_name=f'converted_image{get_extension(conversion_type)}'
             )
 
         except ValueError as value_error:
