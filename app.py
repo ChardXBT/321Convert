@@ -93,14 +93,14 @@ def convert_image():
             }
 
             # Get the file extension
-            def get_extension(conversion_type):
+            def get_extension(convert_type): # <--- Changed the name here!
                 extension_map = {
                     'jpg_to_png': '.png',
                     'png_to_jpg': '.jpg',
                     'png_to_webp': '.webp',
                     'webp_to_png': '.png'
                 }
-                return extension_map.get(conversion_type, '.converted')
+                return extension_map.get(convert_type, '.converted')
 
             # Open the converted file and create a byte stream
             with open(converted_filepath, 'rb') as f:
@@ -119,7 +119,7 @@ def convert_image():
                 io.BytesIO(file_bytes),
                 mimetype=mime_types.get(conversion_type, 'application/octet-stream'),
                 as_attachment=True,
-                download_name=f'converted_image{get_extension(conversion_type)}'
+                download_name=f'converted_image{get_extension(conversion_type)}' # <-- Call the function with the original name
             )
 
         except ValueError as value_error:
