@@ -4,40 +4,63 @@
     box-sizing: border-box;
 }
 
+@keyframes subtle-shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-0.1875rem); }
+    20%, 40%, 60%, 80% { transform: translateX(0.1875rem); }
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
 body {
-    font-family: 'Inter', sans-serif;
-    background-color: #f4f6f9;
+    font-family: 'Quicksand', sans-serif;
+    background-color: #f5f0e6;
     display: flex;
     justify-content: center;
     align-items: center;
     min-height: 100vh;
     line-height: 1.6;
-    color: #333;
+    color: #4a4a4a;
 }
 
 .container {
-    background-color: white;
-    border-radius: 12px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    background-color: #fff9f0;
+    border-radius: 0.75rem;
+    box-shadow: 0 0.625rem 1.5625rem rgba(236, 139, 73, 0.2);
     width: 100%;
-    max-width: 500px;
-    padding: 30px;
+    max-width: 31.25rem;
+    padding: 1.875rem;
     text-align: center;
+    transition: transform 0.3s ease;
+}
+
+.container:hover {
+    transform: translateY(-0.3125rem);
 }
 
 h1 {
-    color: #2c3e50;
-    margin-bottom: 20px;
+    color: #ec8b49;
+    margin-bottom: 1.25rem;
     font-weight: 600;
 }
 
 .file-upload {
-    border: 2px dashed #3498db;
-    border-radius: 10px;
-    padding: 40px 20px;
+    border: 0.125rem dashed #ec8b49;
+    border-radius: 0.625rem;
+    padding: 2.5rem 1.25rem;
     text-align: center;
-    transition: background-color 0.3s ease;
-    margin-bottom: 20px;
+    transition: all 0.3s ease;
+    margin-bottom: 1.25rem;
+    background-color: #fff5e6;
+}
+
+.file-upload:hover {
+    background-color: #ffe6cc;
+    border-color: #ec8b49;
 }
 
 .file-upload input[type="file"] {
@@ -46,22 +69,24 @@ h1 {
 
 .file-upload-label {
     display: inline-block;
-    padding: 10px 20px;
-    background-color: #3498db;
+    padding: 0.625rem 1.25rem;
+    background-color: #ec8b49;
     color: white;
-    border-radius: 6px;
+    border-radius: 0.375rem;
     cursor: pointer;
-    transition: background-color 0.3s ease;
-    margin-bottom: 15px;
+    transition: all 0.3s ease;
+    margin-bottom: 0.9375rem;
+    position: relative;
 }
 
 .file-upload-label:hover {
-    background-color: #2980b9;
+    background-color: #d77a3a;
+    animation: subtle-shake 0.5s;
 }
 
 .image-preview {
     max-width: 100%;
-    max-height: 250px;
+    max-height: 15.625rem;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -70,46 +95,84 @@ h1 {
 
 .image-preview img {
     max-width: 100%;
-    max-height: 200px;
+    max-height: 12.5rem;
     object-fit: contain;
-    border-radius: 8px;
-    margin-top: 15px;
+    border-radius: 0.5rem;
+    margin-top: 0.9375rem;
+    transition: transform 0.3s ease;
+    border: 0.125rem solid #a3c9a8;
+}
+
+.image-preview img:hover {
+    transform: scale(1.05);
 }
 
 .image-preview p {
-    color: #7f8c8d;
+    color: #ec8b49;
     font-style: italic;
 }
 
 select, input[type="submit"] {
     width: 100%;
-    padding: 10px;
-    margin: 10px 0;
-    border-radius: 6px;
-    border: 1px solid #ddd;
+    padding: 0.625rem;
+    margin: 0.625rem 0;
+    border-radius: 0.375rem;
+    border: 0.0625rem solid #a3c9a8;
+    transition: all 0.3s ease;
+}
+
+select:focus, input[type="submit"]:focus {
+    outline: none;
+    border-color: #ec8b49;
+    box-shadow: 0 0 0 0.1875rem rgba(236, 139, 73, 0.3);
 }
 
 input[type="submit"] {
-    background-color: #2ecc71;
+    background-color: #ec8b49;
     color: white;
     border: none;
     cursor: pointer;
-    transition: background-color 0.3s ease;
+    transition: all 0.3s ease;
 }
 
 input[type="submit"]:hover {
-    background-color: #27ae60;
+    background-color: #d77a3a;
+    animation: subtle-shake 0.5s;
 }
+
 .download-button {
     display: inline-block;
-    padding: 10px 20px;
-    background-color: #2ecc71;
+    padding: 0.625rem 1.25rem;
+    background-color: #ec8b49;
     color: white;
     text-decoration: none;
-    border-radius: 6px;
-    transition: background-color 0.3s ease;
+    border-radius: 0.375rem;
+    transition: all 0.3s ease;
+    position: relative;
 }
 
 .download-button:hover {
-    background-color: #27ae60;
+    background-color: #d77a3a;
+    animation: subtle-shake 0.5s;
+}
+
+.loading {
+    animation: pulse 1.5s infinite;
+}
+
+.conversion-selects {
+    display: flex;
+    gap: 1.25rem;
+    margin-bottom: 1.25rem;
+}
+
+.input-format, .output-format {
+    flex: 1;
+}
+
+label {
+    display: block;
+    margin-bottom: 0.625rem;
+    color: #ec8b49;
+    font-weight: 600;
 }
