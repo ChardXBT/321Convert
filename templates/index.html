@@ -18,31 +18,70 @@
                     <p id="preview-text">No file chosen</p>
                 </div>
             </div>
-            <select id="conversionType" name="conversion" required>
-                <option value="jpg_to_png">JPEG to PNG</option>
-                <option value="png_to_jpg">PNG to JPEG</option>
-                <option value="png_to_webp">PNG to WebP</option>
-                <option value="webp_to_png">WebP to PNG</option>
-            </select>
-            <input type="submit" value="Convert">
+
+            <div class="conversion-selects">
+                <div class="input-format">
+                    <label for="inputFormat">Current File Type</label>
+                    <select id="inputFormat" name="input_format" required>
+                        <option value="">Select Input Format</option>
+                        <option value="jpg">JPEG</option>
+                        <option value="png">PNG</option>
+                        <option value="webp">WebP</option>
+                    </select>
+                </div>
+
+                <div class="output-format">
+                    <label for="outputFormat">Convert To</label>
+                    <select id="outputFormat" name="output_format" required disabled>
+                        <option value="">Select Output Format</option>
+                    </select>
+                </div>
+            </div>
+
+            <input type="submit" value="Convert" id="convertSubmit" disabled>
         </form>
         <div id="downloadLink" style="display: none; margin-top: 15px;">
             <a href="#" id="downloadBtn" class="download-button">Download Converted Image</a>
         </div>
     </div>
     <script>
-        document.getElementById('imageInput').addEventListener('change', function(event) {
+        const imageInput = document.getElementById('imageInput');
+        const inputFormatSelect = document.getElementById('inputFormat');
+        const outputFormatSelect = document.getElementById('outputFormat');
+        const convertSubmit = document.getElementById('convertSubmit');
+        const previewImg = document.getElementById('preview-img');
+        const previewText = document.getElementById('preview-text');
+
+        // File selection and preview
+        imageInput.addEventListener('change', function(event) {
             const file = event.target.files[0];
-            const previewImg = document.getElementById('preview-img');
-            const previewText = document.getElementById('preview-text');
 
             if (file) {
                 const reader = new FileReader();
+                const fileExtension = file.name.split('.').pop().toLowerCase();
 
                 reader.onload = function(e) {
                     previewImg.src = e.target.result;
                     previewImg.style.display = 'block';
                     previewText.style.display = 'none';
+
+                    // Reset and enable input format select
+                    inputFormatSelect.value = fileExtension;
+
+                    // Clear and populate output formats
+                    outputFormatSelect.innerHTML = '<option value="">Select Output Format</option>';
+
+                    // Add output format options (excluding current input format)
+                    const formats = ['jpg', 'png', 'webp'].filter(format => format !== fileExtension);
+                    formats.forEach(format => {
+                        const option = document.createElement('option');
+                        option.value = format;
+                        option.textContent = format.toUpperCase();
+                        outputFormatSelect.appendChild(option);
+                    });
+
+                    // Enable output format select
+                    outputFormatSelect.disabled = false;
                 }
 
                 reader.readAsDataURL(file);
@@ -50,9 +89,18 @@
                 previewImg.style.display = 'none';
                 previewText.style.display = 'block';
                 previewText.textContent = 'No file chosen';
+                inputFormatSelect.value = '';
+                outputFormatSelect.disabled = true;
+                convertSubmit.disabled = true;
             }
         });
 
+        // Output format selection
+        outputFormatSelect.addEventListener('change', function() {
+            convertSubmit.disabled = !this.value;
+        });
+
+        // Conversion form submission
         document.getElementById('convertForm').addEventListener('submit', function(event) {
             event.preventDefault();
 
@@ -68,23 +116,11 @@
                 const downloadLink = document.getElementById('downloadLink');
                 const downloadBtn = document.getElementById('downloadBtn');
 
-                const url = window.URL.createObjectURL(blob);
-                downloadBtn.href = url;
+                downloadBtn.href = window.URL.createObjectURL(blob);
 
-                // Determine file extension based on conversion type
-                const conversionType = document.getElementById('conversionType').value;
-                const extensionMap = {
-                    'jpg_to_png': '.png',
-                    'png_to_jpg': '.jpg',
-                    'png_to_webp': '.webp',
-                    'webp_to_png': '.png'
-                };
-                const fileExtension = extensionMap[conversionType] || '.converted';
-
-                // Set download attribute with original filename and new extension
-                const originalFileName = document.getElementById('imageInput').files[0].name;
-                const newFileName = originalFileName.replace(/\.[^/.]+$/, '') + fileExtension;
-                downloadBtn.download = newFileName;
+                // Generate filename with new extension
+                const originalFileName = imageInput.files[0].name;
+                downloadBtn.download = originalFileName.replace(/\.[^/.]+$/, '') + '.' + outputFormatSelect.value;
 
                 // Show download link
                 downloadLink.style.display = 'block';
