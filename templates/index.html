@@ -6,8 +6,49 @@
     <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;600&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        /* Enhanced select styling */
+        .custom-select {
+            position: relative;
+            width: 100%;
+            max-width: 300px;
+        }
+
+        .custom-select select {
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            width: 100%;
+            padding: 10px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            background-color: #fff3e6;  /* Light orange background by default */
+            color: #333;
+            font-family: 'Inter', sans-serif;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .custom-select select:focus {
+            outline: none;
+            border-color: #4a90e2;
+            background-color: #f0f6ff;  /* Light blue on focus */
+            box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+        }
+
+        .custom-select select:hover {
+            border-color: #4a90e2;
+        }
+
+        /* Style for placeholder option */
+        .custom-select select option[value=""] {
+            color: #888;
+        }
+    </style>
 </head>
 <body>
+    <!-- Rest of the HTML remains the same as in the previous version -->
     <div class="container">
         <h1>Image Converter</h1>
         <form id="convertForm" enctype="multipart/form-data">
@@ -21,20 +62,20 @@
             </div>
 
             <div class="conversion-selects">
-                <div class="input-format">
+                <div class="input-format custom-select">
                     <label for="inputFormat">Current File Type</label>
                     <select id="inputFormat" name="input_format" required>
-                        <option value="">Select Input Format</option>
+                        <option value="" style="color: #888;">Select Input Format</option>
                         <option value="jpg">JPEG</option>
                         <option value="png">PNG</option>
                         <option value="webp">WebP</option>
                     </select>
                 </div>
 
-                <div class="output-format">
+                <div class="output-format custom-select">
                     <label for="outputFormat">Convert To</label>
                     <select id="outputFormat" name="output_format" required disabled>
-                        <option value="">Select Output Format</option>
+                        <option value="" style="color: #888;">Select Output Format</option>
                     </select>
                 </div>
             </div>
