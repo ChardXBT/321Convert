@@ -1,13 +1,16 @@
 # File Converter Project
 
 ## Description
-A web-based file conversion tool that allows users to convert between different image formats. 
-Vist https://file-converter-h1dj.onrender.com
+A web-based file conversion tool that allows users to convert between different image formats with ease.
+
+**Live Demo:** [File Converter](https://file-converter-h1dj.onrender.com)
 
 ## Features
 - Convert images between multiple formats (PNG, JPG, WEBP, etc.)
-- Simple web interface
-- Easy to use
+- Simple and intuitive web interface
+- Drag-and-drop file upload support
+- Fast and efficient conversion process
+- No need for installation—accessible from the web
 
 ## Installation
 
@@ -16,35 +19,55 @@ Vist https://file-converter-h1dj.onrender.com
 - pip (Python package manager)
 
 ### Setup
-1. Clone the repository
-```
-git clone https://github.com/YOUR-USERNAME/File_Converter.git
-```
+1. **Clone the repository**
+   ```sh
+   git clone https://github.com/YOUR-USERNAME/File_Converter.git
+   cd File_Converter
+   ```
 
-2. Create a virtual environment
-```
-python -m venv venv
-source venv/bin/activate  # On Windows use `venv\Scripts\activate`
-```
+2. **Create a virtual environment**
+   ```sh
+   python -m venv venv
+   source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+   ```
 
-3. Install dependencies
-```
-pip install -r requirements.txt
-```
+3. **Install dependencies**
+   ```sh
+   pip install -r requirements.txt
+   ```
 
-4. Run the application
-```
-python app.py
-```
+4. **Run the application**
+   ```sh
+   python app.py
+   ```
+
+5. **Access the application**
+   Open your web browser and go to `http://127.0.0.1:5000/`
 
 ## Technologies Used
-- Flask
-- Pillow
-- HTML/CSS
+- **Flask** - Web framework for Python
+- **Pillow** - Image processing library
+- **HTML/CSS** - Frontend design
 
 ## Future Improvements
-- Support more file types
-- Add more conversion options
+- Support for more file types (PDF, GIF, BMP, etc.)
+- Batch file conversion
+- Cloud storage integration (Google Drive, Dropbox, etc.)
+- Dark mode UI option
 
 ## Contributions
-Pull requests are welcome. For major changes, please open an issue first.
+Contributions are welcome! To contribute:
+1. Fork the repository
+2. Create a new branch (`git checkout -b feature-branch`)
+3. Commit your changes (`git commit -m "Add new feature"`)
+4. Push to the branch (`git push origin feature-branch`)
+5. Open a pull request
+
+For major changes, please open an issue first to discuss what you'd like to change.
+
+## License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+**Developed with ❤️ by EySXBT**
+
