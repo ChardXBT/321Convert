@@ -81,7 +81,7 @@ h1 {
 
 .file-upload-label:hover {
     background-color: #d77a3a;
-    animation: subtle-shake 0.5s;
+    animation: subtle-shake 0.2s;
 }
 
 .image-preview {
@@ -137,7 +137,7 @@ input[type="submit"] {
 
 input[type="submit"]:hover {
     background-color: #d77a3a;
-    animation: subtle-shake 0.5s;
+    animation: subtle-shake 0.3s;
 }
 
 .download-button {
@@ -153,7 +153,7 @@ input[type="submit"]:hover {
 
 .download-button:hover {
     background-color: #d77a3a;
-    animation: subtle-shake 0.5s;
+    animation: subtle-shake 0.3s;
 }
 
 .loading {
