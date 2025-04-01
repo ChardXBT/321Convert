@@ -52,7 +52,7 @@
         <h1>Image Converter</h1>
         <form id="convertForm" enctype="multipart/form-data">
             <div class="file-upload">
-                <input type="file" id="imageInput" name="image" accept=".jpg,.jpeg,.png,.webp,.gif" required>
+                <input type="file" id="imageInput" name="image" accept=".jpg,.jpeg,.png,.webp,.gif,.bmp,.tiff" required>
                 <label for="imageInput" class="file-upload-label">Choose Image</label>
                 <div id="image-preview" class="image-preview">
                     <img id="preview-img" src="" alt="Image Preview" style="display: none;">
@@ -69,6 +69,8 @@
                         <option value="png">PNG</option>
                         <option value="webp">WebP</option>
                         <option value="gif">GIF</option>
+                        <option value="bmp">BMP</option>
+                        <option value="tiff">TIFF</option>
                     </select>
                 </div>
 
@@ -119,7 +121,7 @@
                     outputFormatSelect.innerHTML = '<option value="">Select Output Format</option>';
 
                     // Add output format options (excluding current input format)
-                    const formats = ['jpg', 'png', 'webp', 'gif'].filter(format => format !== fileExtension);
+                    const formats = ['jpg', 'png', 'webp', 'gif', 'bmp', 'tiff'].filter(format => format !== fileExtension);
                     formats.forEach(format => {
                         const option = document.createElement('option');
                         option.value = format;
@@ -148,46 +150,45 @@
         });
 
         // Conversion form submission
-        // Conversion form submission
-document.getElementById('convertForm').addEventListener('submit', async function(event) {
-    event.preventDefault();
+        document.getElementById('convertForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
 
-    const formData = new FormData(this);
+            const formData = new FormData(this);
 
-    try {
-        const response = await fetch('/convert', {
-            method: 'POST',
-            body: formData
+            try {
+                const response = await fetch('/convert', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    // Instead of throwing an error to be caught locally, handle it directly
+                    const errorText = await response.text();
+                    alert('Conversion failed: ' + (errorText || 'Unknown error'));
+                    return; // Exit the function instead of throwing
+                }
+
+                // Get the blob directly
+                const blob = await response.blob();
+
+                // Create a download link
+                const downloadLink = document.getElementById('downloadLink');
+                const downloadBtn = document.getElementById('downloadBtn');
+
+                // Create the object URL and assign it directly to the href
+                downloadBtn.href = URL.createObjectURL(blob);
+
+                // Generate filename with new extension
+                const originalFileName = imageInput.files[0].name;
+                downloadBtn.download = originalFileName.replace(/\.[^/.]+$/, '') + '.' + outputFormatSelect.value;
+
+                // Show download link
+                downloadLink.style.display = 'block';
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Conversion failed: ' + error.message);
+            }
         });
-
-        if (!response.ok) {
-            // Instead of throwing an error to be caught locally, handle it directly
-            const errorText = await response.text();
-            alert('Conversion failed: ' + (errorText || 'Unknown error'));
-            return; // Exit the function instead of throwing
-        }
-
-        // Get the blob directly
-        const blob = await response.blob();
-
-        // Create a download link
-        const downloadLink = document.getElementById('downloadLink');
-        const downloadBtn = document.getElementById('downloadBtn');
-
-        // Create the object URL and assign it directly to the href
-        downloadBtn.href = URL.createObjectURL(blob);
-
-        // Generate filename with new extension
-        const originalFileName = imageInput.files[0].name;
-        downloadBtn.download = originalFileName.replace(/\.[^/.]+$/, '') + '.' + outputFormatSelect.value;
-
-        // Show download link
-        downloadLink.style.display = 'block';
-    } catch (error) {
-        console.error('Error:', error);
-        alert('Conversion failed: ' + error.message);
-    }
-});
     </script>
 </body>
 </html>
