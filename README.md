@@ -69,5 +69,5 @@ For major changes, please open an issue first to discuss what you'd like to chan
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
-**Developed with ❤️ by EySXBT**
+**Developed with ❤️ by Chardium**
 
