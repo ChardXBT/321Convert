@@ -8,7 +8,14 @@ from conversions.image_converter import (
     convert_png_to_jpeg,
     convert_jpeg_to_png,
     convert_png_to_webp,
-    convert_webp_to_png
+    convert_webp_to_png,
+    # New GIF converters
+    convert_gif_to_png,
+    convert_png_to_gif,
+    convert_jpg_to_gif,
+    convert_gif_to_jpg,
+    convert_webp_to_gif,
+    convert_gif_to_webp
 )
 
 # Import the ConverterFactory
@@ -28,10 +35,19 @@ def initialize_converters():
     """
     Register all available converters
     """
+    # Original converters
     ConverterFactory.register('jpg_to_png', convert_jpeg_to_png)
     ConverterFactory.register('png_to_jpg', convert_png_to_jpeg)
     ConverterFactory.register('png_to_webp', convert_png_to_webp)
     ConverterFactory.register('webp_to_png', convert_webp_to_png)
+
+    # New GIF converters
+    ConverterFactory.register('gif_to_png', convert_gif_to_png)
+    ConverterFactory.register('png_to_gif', convert_png_to_gif)
+    ConverterFactory.register('jpg_to_gif', convert_jpg_to_gif)
+    ConverterFactory.register('gif_to_jpg', convert_gif_to_jpg)
+    ConverterFactory.register('webp_to_gif', convert_webp_to_gif)
+    ConverterFactory.register('gif_to_webp', convert_gif_to_webp)
 
 
 # Initialize converters when the app starts
@@ -89,18 +105,32 @@ def convert_image():
                 'jpg_to_png': 'image/png',
                 'png_to_jpg': 'image/jpeg',
                 'png_to_webp': 'image/webp',
-                'webp_to_png': 'image/png'
+                'webp_to_png': 'image/png',
+                # New GIF mime types
+                'gif_to_png': 'image/png',
+                'png_to_gif': 'image/gif',
+                'jpg_to_gif': 'image/gif',
+                'gif_to_jpg': 'image/jpeg',
+                'webp_to_gif': 'image/gif',
+                'gif_to_webp': 'image/webp'
             }
 
             # Get the file extension
-            def get_extension(convert_type): # <--- Changed the name here!
+            def get_extension(conv_type):
                 extension_map = {
                     'jpg_to_png': '.png',
                     'png_to_jpg': '.jpg',
                     'png_to_webp': '.webp',
-                    'webp_to_png': '.png'
+                    'webp_to_png': '.png',
+                    # New GIF extensions
+                    'gif_to_png': '.png',
+                    'png_to_gif': '.gif',
+                    'jpg_to_gif': '.gif',
+                    'gif_to_jpg': '.jpg',
+                    'webp_to_gif': '.gif',
+                    'gif_to_webp': '.webp'
                 }
-                return extension_map.get(convert_type, '.converted')
+                return extension_map.get(conv_type, '.converted')
 
             # Open the converted file and create a byte stream
             with open(converted_filepath, 'rb') as f:
@@ -119,7 +149,7 @@ def convert_image():
                 io.BytesIO(file_bytes),
                 mimetype=mime_types.get(conversion_type, 'application/octet-stream'),
                 as_attachment=True,
-                download_name=f'converted_image{get_extension(conversion_type)}' # <-- Call the function with the original name
+                download_name=f'converted_image{get_extension(conversion_type)}'
             )
 
         except ValueError as value_error:
