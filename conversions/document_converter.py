@@ -126,6 +126,9 @@ def text_to_html(text_path, **kwargs):
             text_content = f.read()
 
         # Convert to simple HTML
+        paragraphs = text_content.split('\n\n')
+        formatted_paragraphs = "".join(f"<p>{paragraph}</p>" for paragraph in paragraphs if paragraph.strip())
+
         html_content = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -139,7 +142,7 @@ def text_to_html(text_path, **kwargs):
 </head>
 <body>
     <h1>{title}</h1>
-    {''.join(f'<p>{paragraph}</p>' for paragraph in text_content.split('\n\n') if paragraph.strip())}
+    {formatted_paragraphs}
 </body>
 </html>"""
 
@@ -150,6 +153,7 @@ def text_to_html(text_path, **kwargs):
         return output_path
     except Exception as e:
         raise ValueError(f"Error converting text to HTML: {str(e)}")
+
 
 
 def image_to_text(image_path, **kwargs):
