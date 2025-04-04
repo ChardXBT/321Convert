@@ -1,6 +1,5 @@
 from typing import Callable, Dict
 
-
 class ConverterFactory:
     """
     A factory class to manage different types of converters
@@ -32,3 +31,10 @@ class ConverterFactory:
             raise ValueError(f"No converter registered for type: {conversion_type}")
 
         return cls._converters[conversion_type](input_path, output_dir)
+
+    @classmethod
+    def get_converters(cls):
+        """
+        Return all registered converters.
+        """
+        return cls._converters
