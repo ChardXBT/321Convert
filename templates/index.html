@@ -2,192 +2,385 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Image Converter</title>
-    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;600&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Converter</title>
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <style>
-        /* Enhanced select styling */
-        .custom-select {
-            position: relative;
-            width: 100%;
-            max-width: 300px;
+        .hidden {
+            display: none;
         }
 
-        .custom-select select {
-            appearance: none;
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            width: 100%;
+        .notification {
             padding: 10px 15px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            background-color: #fff3e6;  /* Light orange background by default */
-            color: #333;
-            font-family: 'Inter', sans-serif;
-            font-size: 16px;
-            cursor: pointer;
-            transition: all 0.3s ease;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            display: none;
         }
 
-        .custom-select select:focus {
-            outline: none;
-            border-color: #4a90e2;
-            background-color: #f0f6ff;  /* Light blue on focus */
-            box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
         }
 
-        .custom-select select:hover {
-            border-color: #4a90e2;
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
         }
 
-        /* Style for placeholder option */
-        .custom-select select option[value=""] {
-            color: #888;
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 2s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Image Converter</h1>
-        <form id="convertForm" enctype="multipart/form-data">
-            <div class="file-upload">
-                <input type="file" id="imageInput" name="image" accept=".jpg,.jpeg,.png,.webp,.gif,.bmp,.tiff" required>
-                <label for="imageInput" class="file-upload-label">Choose Image</label>
-                <div id="image-preview" class="image-preview">
-                    <img id="preview-img" src="" alt="Image Preview" style="display: none;">
-                    <p id="preview-text">No file chosen</p>
-                </div>
+        <h1>Document Converter</h1>
+
+        <!-- Notification area for displaying messages -->
+        <div id="notification" class="notification"></div>
+
+        <div class="tab">
+            <button class="tab-links active" onclick="openTab(event, 'imageTab')">Image Conversion</button>
+            <button class="tab-links" onclick="openTab(event, 'docTab')">Document Conversion</button>
+        </div>
+
+        <!-- Image Conversion Tab -->
+        <div id="imageTab" class="tab-content" style="display: block;">
+            <h2>Image Conversion</h2>
+
+            <div id="imageLoading" class="loading">
+                <div class="loading-spinner"></div>
+                <p>Processing your image...</p>
             </div>
 
-            <div class="conversion-selects">
-                <div class="input-format custom-select">
-                    <label for="inputFormat">Current File Type</label>
-                    <select id="inputFormat" name="input_format" required>
-                        <option value="" style="color: #888;">Select Input Format</option>
-                        <option value="jpg">JPEG</option>
-                        <option value="png">PNG</option>
-                        <option value="webp">WebP</option>
-                        <option value="gif">GIF</option>
-                        <option value="bmp">BMP</option>
-                        <option value="tiff">TIFF</option>
-                    </select>
+            <form id="imageConversionForm" action="/convert" method="post" enctype="multipart/form-data">
+                <div class="file-upload">
+                    <input type="file" id="image" name="image" accept="image/*" required>
+                    <label for="image" class="file-upload-label">Select Image</label>
+                    <p>Or drag and drop files here</p>
+                    <div class="image-preview"></div>
                 </div>
 
-                <div class="output-format custom-select">
-                    <label for="outputFormat">Convert To</label>
-                    <select id="outputFormat" name="output_format" required disabled>
-                        <option value="" style="color: #888;">Select Output Format</option>
-                    </select>
+                <div class="conversion-selects">
+                    <div class="input-format">
+                        <label for="input_format">Input Format:</label>
+                        <select id="input_format" name="input_format" required>
+                            <option value="jpg">JPG/JPEG</option>
+                            <option value="png">PNG</option>
+                            <option value="webp">WebP</option>
+                            <option value="gif">GIF</option>
+                            <option value="bmp">BMP</option>
+                            <option value="tiff">TIFF</option>
+                        </select>
+                    </div>
+
+                    <div class="output-format">
+                        <label for="output_format">Output Format:</label>
+                        <select id="output_format" name="output_format" required>
+                            <option value="jpg">JPG/JPEG</option>
+                            <option value="png">PNG</option>
+                            <option value="webp">WebP</option>
+                            <option value="gif">GIF</option>
+                            <option value="bmp">BMP</option>
+                            <option value="tiff">TIFF</option>
+                        </select>
+                    </div>
                 </div>
+
+                <label for="quality">Quality (1-100):</label>
+                <input type="number" id="quality" name="quality" min="1" max="100" value="80">
+
+                <input type="submit" value="Convert Image">
+            </form>
+
+            <div id="imageResult" class="result-container hidden">
+                <h3>Conversion Result</h3>
+                <div id="imageResultContent"></div>
+            </div>
+        </div>
+
+        <!-- Document Conversion Tab -->
+        <div id="docTab" class="tab-content">
+            <h2>Document Conversion</h2>
+
+            <div id="docLoading" class="loading">
+                <div class="loading-spinner"></div>
+                <p>Processing your document...</p>
             </div>
 
-            <input type="submit" value="Convert" id="convertSubmit" disabled>
-        </form>
-        <div id="downloadLink" style="display: none; margin-top: 15px;">
-            <a href="#" id="downloadBtn" class="download-button">Download Converted Image</a>
+            <form id="docConversionForm" action="/document/convert" method="post" enctype="multipart/form-data">
+                <div class="file-upload">
+                    <input type="file" id="doc_file" name="file" accept=".docx,.xlsx,.html,.txt,.pdf" required>
+                    <label for="doc_file" class="file-upload-label">Select Document</label>
+                    <p>Or drag and drop files here</p>
+                    <div class="doc-preview"></div>
+                </div>
+
+                <label for="doc_conversion">Conversion Type:</label>
+                <select id="doc_conversion" name="conversion_type" onchange="showDocOptions()" required>
+                    <option value="">Select Conversion</option>
+                    <option value="docx_to_pdf">DOCX to PDF</option>
+                    <option value="html_to_pdf">HTML to PDF</option>
+                    <option value="excel_to_pdf">Excel to PDF</option>
+                    <option value="pdf_to_docx">PDF to DOCX</option>
+                    <option value="create_csv_from_excel">Excel to CSV</option>
+                    <option value="text_to_html">Text to HTML</option>
+                    <option value="image_to_text">Image to Text (OCR)</option>
+                </select>
+
+                <!-- Excel Options -->
+                <div id="excelOptions" class="hidden doc-options">
+                    <label for="sheet_name">Sheet Name (optional):</label>
+                    <input type="text" id="sheet_name" name="sheet_name" placeholder="Leave empty for first sheet">
+                </div>
+
+                <!-- HTML Options -->
+                <div id="htmlOptions" class="hidden doc-options">
+                    <label for="title">Document Title:</label>
+                    <input type="text" id="title" name="title" value="Converted Document">
+                </div>
+
+                <input type="submit" value="Convert Document">
+            </form>
+
+            <div id="docResult" class="result-container hidden">
+                <h3>Document Conversion Result</h3>
+                <div id="docResultContent"></div>
+            </div>
         </div>
     </div>
+
     <script>
-        const imageInput = document.getElementById('imageInput');
-        const inputFormatSelect = document.getElementById('inputFormat');
-        const outputFormatSelect = document.getElementById('outputFormat');
-        const convertSubmit = document.getElementById('convertSubmit');
-        const previewImg = document.getElementById('preview-img');
-        const previewText = document.getElementById('preview-text');
-
-        // File selection and preview
-        imageInput.addEventListener('change', function(event) {
-            const file = event.target.files[0];
-
-            if (file) {
-                const reader = new FileReader();
-                let fileExtension = file.name.split('.').pop().toLowerCase();
-
-                // Handle jpeg extension
-                if (fileExtension === 'jpeg') {
-                    fileExtension = 'jpg';
-                }
-
-                reader.onload = function(e) {
-                    previewImg.src = e.target.result;
-                    previewImg.style.display = 'block';
-                    previewText.style.display = 'none';
-
-                    // Reset and enable input format select
-                    inputFormatSelect.value = fileExtension;
-
-                    // Clear and populate output formats
-                    outputFormatSelect.innerHTML = '<option value="">Select Output Format</option>';
-
-                    // Add output format options (excluding current input format)
-                    const formats = ['jpg', 'png', 'webp', 'gif', 'bmp', 'tiff'].filter(format => format !== fileExtension);
-                    formats.forEach(format => {
-                        const option = document.createElement('option');
-                        option.value = format;
-                        option.textContent = format.toUpperCase();
-                        outputFormatSelect.appendChild(option);
-                    });
-
-                    // Enable output format select
-                    outputFormatSelect.disabled = false;
-                }
-
-                reader.readAsDataURL(file);
-            } else {
-                previewImg.style.display = 'none';
-                previewText.style.display = 'block';
-                previewText.textContent = 'No file chosen';
-                inputFormatSelect.value = '';
-                outputFormatSelect.disabled = true;
-                convertSubmit.disabled = true;
+        function openTab(evt, tabName) {
+            // Hide all tab content
+            const tabContent = document.getElementsByClassName("tab-content");
+            for (let i = 0; i < tabContent.length; i++) {
+                tabContent[i].style.display = "none";
             }
-        });
 
-        // Output format selection
-        outputFormatSelect.addEventListener('change', function() {
-            convertSubmit.disabled = !this.value;
-        });
+            // Remove active class from all tab buttons
+            const tabLinks = document.getElementsByClassName("tab-links");
+            for (let i = 0; i < tabLinks.length; i++) {
+                tabLinks[i].className = tabLinks[i].className.replace(" active", "");
+            }
 
-        // Conversion form submission
-        document.getElementById('convertForm').addEventListener('submit', async function(event) {
-            event.preventDefault();
+            // Show the selected tab and add active class to the button
+            document.getElementById(tabName).style.display = "block";
+            evt.currentTarget.className += " active";
+        }
 
-            const formData = new FormData(this);
+        function showDocOptions() {
+            // Hide all document option divs
+            const options = document.getElementsByClassName("doc-options");
+            for (let i = 0; i < options.length; i++) {
+                options[i].classList.add("hidden");
+            }
 
-            try {
-                const response = await fetch('/convert', {
+            // Show the selected option div
+            const conversion = document.getElementById("doc_conversion").value;
+            if (conversion === "excel_to_pdf" || conversion === "create_csv_from_excel") {
+                document.getElementById("excelOptions").classList.remove("hidden");
+            } else if (conversion === "text_to_html") {
+                document.getElementById("htmlOptions").classList.remove("hidden");
+            }
+        }
+
+        function showNotification(message, type) {
+            const notification = document.getElementById('notification');
+            notification.innerHTML = message;
+            notification.className = 'notification ' + type;
+            notification.style.display = 'block';
+
+            // Auto hide after 5 seconds
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 5000);
+        }
+
+        // Add image preview functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const fileInputs = document.querySelectorAll('input[type="file"]');
+
+            fileInputs.forEach(input => {
+                input.addEventListener('change', function(e) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+
+                    const fileUploadContainer = input.closest('.file-upload');
+                    const previewDiv = fileUploadContainer.querySelector('.image-preview') ||
+                                       fileUploadContainer.querySelector('.doc-preview');
+
+                    if (!previewDiv) return;
+
+                    if (file.type.match('image.*')) {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            previewDiv.innerHTML = `
+                                <img src="${e.target.result}" alt="Preview" style="max-width: 100%; max-height: 200px;">
+                                <p>${file.name}</p>
+                            `;
+                        };
+                        reader.readAsDataURL(file);
+                    } else {
+                        // Display icon based on file type
+                        let iconClass = 'file';
+
+                        if (file.name.endsWith('.pdf')) {
+                            iconClass = 'file-pdf';
+                        } else if (file.name.endsWith('.docx') || file.name.endsWith('.doc')) {
+                            iconClass = 'file-word';
+                        } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+                            iconClass = 'file-excel';
+                        }
+
+                        previewDiv.innerHTML = `
+                            <div class="file-icon ${iconClass}"></div>
+                            <p>${file.name}</p>
+                        `;
+                    }
+                });
+            });
+
+            // Handle Image Conversion Form submission
+            document.getElementById('imageConversionForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+
+                const formData = new FormData(this);
+                const loadingDiv = document.getElementById('imageLoading');
+                const resultDiv = document.getElementById('imageResult');
+                const resultContentDiv = document.getElementById('imageResultContent');
+
+                // Show loading spinner
+                loadingDiv.style.display = 'block';
+                resultDiv.classList.add('hidden');
+
+                fetch('/convert', {
                     method: 'POST',
                     body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    loadingDiv.style.display = 'none';
+
+                    if (data.success) {
+                        showNotification('Image converted successfully!', 'success');
+                        resultDiv.classList.remove('hidden');
+
+                        // Create download link
+                        resultContentDiv.innerHTML = `
+                            <p>Your image has been successfully converted!</p>
+                            <a href="${data.download_url}" class="download-btn" download>Download Converted Image</a>
+                        `;
+
+                        // Check if there's a preview URL available
+                        if (data.preview_url) {
+                            const safePreviewUrl = data.preview_url;
+                            resultContentDiv.innerHTML += `
+                                <div class="preview-image">
+                                    <img src="${safePreviewUrl}" alt="Converted image preview">
+                                </div>
+                            `;
+                        }
+                    } else {
+                        showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
+                    }
+                })
+                .catch(error => {
+                    loadingDiv.style.display = 'none';
+                    showNotification('Error: ' + error.message, 'error');
                 });
+            });
 
-                if (!response.ok) {
-                    // Instead of throwing an error to be caught locally, handle it directly
-                    const errorText = await response.text();
-                    alert('Conversion failed: ' + (errorText || 'Unknown error'));
-                    return; // Exit the function instead of throwing
-                }
+            // Handle Document Conversion Form submission
+            document.getElementById('docConversionForm').addEventListener('submit', function(e) {
+                e.preventDefault();
 
-                // Get the blob directly
-                const blob = await response.blob();
+                const formData = new FormData(this);
+                const loadingDiv = document.getElementById('docLoading');
+                const resultDiv = document.getElementById('docResult');
+                const resultContentDiv = document.getElementById('docResultContent');
 
-                // Create a download link
-                const downloadLink = document.getElementById('downloadLink');
-                const downloadBtn = document.getElementById('downloadBtn');
+                // Show loading spinner
+                loadingDiv.style.display = 'block';
+                resultDiv.classList.add('hidden');
 
-                // Create the object URL and assign it directly to the href
-                downloadBtn.href = URL.createObjectURL(blob);
+                fetch('/document/convert', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    loadingDiv.style.display = 'none';
 
-                // Generate filename with new extension
-                const originalFileName = imageInput.files[0].name;
-                downloadBtn.download = originalFileName.replace(/\.[^/.]+$/, '') + '.' + outputFormatSelect.value;
+                    if (data.success) {
+                        showNotification('Document converted successfully!', 'success');
+                        resultDiv.classList.remove('hidden');
 
-                // Show download link
-                downloadLink.style.display = 'block';
-            } catch (error) {
-                console.error('Error:', error);
-                alert('Conversion failed: ' + error.message);
-            }
+                        // Create result content based on conversion type
+                        const conversion = document.getElementById('doc_conversion').value;
+
+                        if (conversion === 'image_to_text') {
+                            resultContentDiv.innerHTML = `
+                                <div class="ocr-result">
+                                    <h4>Extracted Text:</h4>
+                                    <pre>${data.text || ''}</pre>
+                                    <a href="${data.download_url}" class="download-btn" download>Download Text File</a>
+                                </div>
+                            `;
+                        } else if (conversion === 'text_to_html') {
+                            const safeHtmlPreview = data.html_preview || '';
+                            resultContentDiv.innerHTML = `
+                                <div class="html-preview">
+                                    <h4>HTML Preview:</h4>
+                                    <iframe srcdoc="${safeHtmlPreview}" style="width: 100%; height: 300px; border: 1px solid #ddd;"></iframe>
+                                    <a href="${data.download_url}" class="download-btn" download>Download HTML File</a>
+                                </div>
+                            `;
+                        } else {
+                            resultContentDiv.innerHTML = `
+                                <p>Your document has been successfully converted!</p>
+                                <a href="${data.download_url}" class="download-btn" download>Download Converted Document</a>
+                            `;
+                        }
+                    } else {
+                        showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
+                    }
+                })
+                .catch(error => {
+                    loadingDiv.style.display = 'none';
+                    showNotification('Error: ' + error.message, 'error');
+                });
+            });
         });
     </script>
 </body>

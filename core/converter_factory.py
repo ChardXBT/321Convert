@@ -1,14 +1,13 @@
 from typing import Callable, Dict
 
-
 class ConverterFactory:
     """
     A factory class to manage different types of converters
     """
-    _converters: Dict[str, Callable] = {}
+    _converters: Dict[str, Callable] = {}  # Fixed the asterisk typo
 
     @classmethod
-    def register(cls, conversion_type: str, converter_func: Callable):
+    def register(cls, conversion_type: str, converter_func: Callable):  # Fixed the asterisk typo
         """
         Register a new converter function
 
@@ -18,17 +17,24 @@ class ConverterFactory:
         cls._converters[conversion_type] = converter_func
 
     @classmethod
-    def convert(cls, conversion_type: str, input_path: str, output_dir: str = None):
+    def convert(cls, conversion_type: str, input_path: str, **kwargs):
         """
         Perform conversion using the registered converter
 
         :param conversion_type: Type of conversion to perform
         :param input_path: Path to the input file
-        :param output_dir: Optional output directory
-        :return: Path to the converted file
+        :param kwargs: Additional parameters to pass to the converter function
+        :return: Path to the converted file or other result
         :raises ValueError: If conversion type is not registered
         """
         if conversion_type not in cls._converters:
             raise ValueError(f"No converter registered for type: {conversion_type}")
 
-        return cls._converters[conversion_type](input_path, output_dir)
+        return cls._converters[conversion_type](input_path, **kwargs)
+
+    @classmethod
+    def get_converters(cls):
+        """
+        Return all registered converters.
+        """
+        return cls._converters

@@ -1,215 +1,88 @@
-from PIL import Image
 import os
+from PIL import Image
+from core.converter_factory import ConverterFactory
 
 
-def convert_image(input_path, output_format, output_dir=None, quality=80):
+def convert_image(input_path, output_format, **kwargs):
     """
-    Convert an image to the specified format
+    Convert an image to a different format
 
-    Args:
-        input_path (str): Path to the input image file
-        output_format (str): Target format ('JPEG', 'PNG', 'GIF', 'WEBP', 'BMP', 'TIFF')
-        output_dir (str, optional): Directory to save converted file.
-                                    Defaults to same directory as input file.
-        quality (int, optional): Quality for lossy formats. Defaults to 80.
-
-    Returns:
-        str: Path to the converted image file
+    :param input_path: Path to the input image
+    :param output_format: Target format (PIL format name)
+    :param kwargs: Additional parameters (quality, etc.)
+    :return: Path to the converted image
     """
-    # Map of format to file extension
-    format_extensions = {
-        'JPEG': '.jpg',
-        'PNG': '.png',
-        'GIF': '.gif',
-        'WEBP': '.webp',
-        'BMP': '.bmp',
-        'TIFF': '.tiff'
-    }
+    quality = kwargs.get('quality', 80)
 
+    # Define output path
+    output_dir = os.path.dirname(input_path)
+    filename = os.path.splitext(os.path.basename(input_path))[0]
+    output_ext = output_format.lower()
+    output_path = os.path.join(output_dir, f"converted_{filename}.{output_ext}")
+
+    # Open and convert the image
     with Image.open(input_path) as img:
-        if output_dir is None:
-            output_dir = os.path.dirname(input_path)
+        # Convert to RGB if saving as JPEG
+        if output_format == 'JPEG' and img.mode in ('RGBA', 'LA'):
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            background.paste(img, mask=img.split()[3])  # 3 is the alpha channel
+            img = background
 
-        # Create output filename with the appropriate extension
-        filename = os.path.splitext(os.path.basename(input_path))[0] + format_extensions[output_format]
-        output_path = os.path.join(output_dir, filename)
+        # Save with appropriate parameters
+        save_image(img, output_path, output_format, quality)
 
-        # Handle special cases based on input format and target format
-        if output_format == 'JPEG':
-            # Handle transparency for JPEG output (needs white background)
-            if img.mode in ('RGBA', 'LA', 'P'):
-                background = Image.new('RGB', img.size, (255, 255, 255))
-                if img.mode == 'P' and 'transparency' in img.info:
-                    img = img.convert('RGBA')
-                if 'A' in img.mode:
-                    background.paste(img, mask=img.split()[-1])
-                    background.save(output_path, output_format, quality=quality)
-                else:
-                    img.convert('RGB').save(output_path, output_format, quality=quality)
-            else:
-                img.convert('RGB').save(output_path, output_format, quality=quality)
-
-        elif output_format == 'GIF':
-            # Handle transparency for GIF
-            if img.mode == 'RGBA':
-                alpha = img.split()[3]
-                img.convert('RGB').convert('P', palette=Image.Palette.ADAPTIVE)
-                mask = Image.eval(alpha, lambda a: 255 if a <= 128 else 0)
-                img.paste(255, mask)
-                img.save(output_path, output_format, transparency=255)
-            else:
-                img.convert('RGB').convert('P', palette=Image.Palette.ADAPTIVE).save(output_path, output_format)
-
-        elif output_format == 'BMP' or output_format == 'TIFF':
-            # BMP and TIFF don't handle transparency well, convert to RGB
-            if img.mode in ('RGBA', 'LA'):
-                background = Image.new('RGB', img.size, (255, 255, 255))
-                background.paste(img, mask=img.split()[-1])
-                background.save(output_path, output_format)
-            else:
-                img.convert('RGB').save(output_path, output_format)
-
-        else:  # PNG and WEBP preserve transparency
-            if output_format == 'WEBP':
-                img.save(output_path, output_format, quality=quality)
-            else:
-                img.save(output_path, output_format)
-
-        return output_path
+    return output_path
 
 
-def convert_from_gif(input_path, output_format, output_dir=None, quality=80):
+def convert_from_gif(input_path, output_format, **kwargs):
     """
-    Handle special case for GIF conversion (to account for animations)
+    Convert a GIF to another format (takes the first frame)
 
-    Args:
-        input_path (str): Path to the input GIF file
-        output_format (str): Target format ('JPEG', 'PNG', 'WEBP', 'BMP', 'TIFF')
-        output_dir (str, optional): Directory to save converted file.
-                                    Defaults to same directory as input file.
-        quality (int, optional): Quality for lossy formats. Defaults to 80.
-
-    Returns:
-        str: Path to the converted image file
+    :param input_path: Path to the input GIF
+    :param output_format: Target format (PIL format name)
+    :param kwargs: Additional parameters (quality, etc.)
+    :return: Path to the converted image
     """
+    quality = kwargs.get('quality', 80)
+
+    # Define output path
+    output_dir = os.path.dirname(input_path)
+    filename = os.path.splitext(os.path.basename(input_path))[0]
+    output_ext = output_format.lower()
+    output_path = os.path.join(output_dir, f"converted_{filename}.{output_ext}")
+
+    # Open GIF and get first frame
     with Image.open(input_path) as img:
-        # Use the first frame of animated GIFs
-        if hasattr(img, 'n_frames') and img.n_frames > 1:
-            img.seek(0)  # Select first frame
+        # Take first frame of the GIF
+        img.seek(0)
 
-        # Use the regular conversion function for the actual conversion
-        return convert_image(input_path, output_format, output_dir, quality)
+        # Convert to RGB if needed
+        if output_format == 'JPEG' and img.mode in ('RGBA', 'LA', 'P'):
+            img = img.convert('RGB')
 
+        # Save with appropriate parameters
+        save_image(img, output_path, output_format, quality)
 
-# Create wrapper functions for backward compatibility
-
-def convert_png_to_jpeg(input_path, output_dir=None):
-    return convert_image(input_path, 'JPEG', output_dir)
-
-
-def convert_jpeg_to_png(input_path, output_dir=None):
-    return convert_image(input_path, 'PNG', output_dir)
+    return output_path
 
 
-def convert_png_to_webp(input_path, output_dir=None):
-    return convert_image(input_path, 'WEBP', output_dir)
+def save_image(img, output_path, output_format, quality):
+    """
+    Helper function to save an image with the appropriate parameters
+
+    :param img: PIL Image object
+    :param output_path: Path where the image will be saved
+    :param output_format: Format to save the image in
+    :param quality: Quality setting for JPEG/WEBP formats
+    """
+    if output_format in ('JPEG', 'WEBP'):
+        img.save(output_path, output_format, quality=quality, optimize=True)
+    elif output_format == 'PNG':
+        img.save(output_path, output_format, optimize=True)
+    else:
+        img.save(output_path, output_format)
 
 
-def convert_webp_to_png(input_path, output_dir=None):
-    return convert_image(input_path, 'PNG', output_dir)
-
-
-def convert_gif_to_png(input_path, output_dir=None):
-    return convert_from_gif(input_path, 'PNG', output_dir)
-
-
-def convert_png_to_gif(input_path, output_dir=None):
-    return convert_image(input_path, 'GIF', output_dir)
-
-
-def convert_jpg_to_gif(input_path, output_dir=None):
-    return convert_image(input_path, 'GIF', output_dir)
-
-
-def convert_gif_to_jpg(input_path, output_dir=None):
-    return convert_from_gif(input_path, 'JPEG', output_dir)
-
-
-def convert_webp_to_gif(input_path, output_dir=None):
-    return convert_image(input_path, 'GIF', output_dir)
-
-
-def convert_gif_to_webp(input_path, output_dir=None):
-    return convert_from_gif(input_path, 'WEBP', output_dir)
-
-
-def convert_bmp_to_png(input_path, output_dir=None):
-    return convert_image(input_path, 'PNG', output_dir)
-
-
-def convert_png_to_bmp(input_path, output_dir=None):
-    return convert_image(input_path, 'BMP', output_dir)
-
-
-def convert_jpg_to_bmp(input_path, output_dir=None):
-    return convert_image(input_path, 'BMP', output_dir)
-
-
-def convert_bmp_to_jpg(input_path, output_dir=None):
-    return convert_image(input_path, 'JPEG', output_dir)
-
-
-def convert_webp_to_bmp(input_path, output_dir=None):
-    return convert_image(input_path, 'BMP', output_dir)
-
-
-def convert_bmp_to_webp(input_path, output_dir=None):
-    return convert_image(input_path, 'WEBP', output_dir)
-
-
-def convert_gif_to_bmp(input_path, output_dir=None):
-    return convert_from_gif(input_path, 'BMP', output_dir)
-
-
-def convert_bmp_to_gif(input_path, output_dir=None):
-    return convert_image(input_path, 'GIF', output_dir)
-
-
-def convert_tiff_to_png(input_path, output_dir=None):
-    return convert_image(input_path, 'PNG', output_dir)
-
-
-def convert_png_to_tiff(input_path, output_dir=None):
-    return convert_image(input_path, 'TIFF', output_dir)
-
-
-def convert_jpg_to_tiff(input_path, output_dir=None):
-    return convert_image(input_path, 'TIFF', output_dir)
-
-
-def convert_tiff_to_jpg(input_path, output_dir=None):
-    return convert_image(input_path, 'JPEG', output_dir)
-
-
-def convert_webp_to_tiff(input_path, output_dir=None):
-    return convert_image(input_path, 'TIFF', output_dir)
-
-
-def convert_tiff_to_webp(input_path, output_dir=None):
-    return convert_image(input_path, 'WEBP', output_dir)
-
-
-def convert_gif_to_tiff(input_path, output_dir=None):
-    return convert_from_gif(input_path, 'TIFF', output_dir)
-
-
-def convert_tiff_to_gif(input_path, output_dir=None):
-    return convert_image(input_path, 'GIF', output_dir)
-
-
-def convert_bmp_to_tiff(input_path, output_dir=None):
-    return convert_image(input_path, 'TIFF', output_dir)
-
-
-def convert_tiff_to_bmp(input_path, output_dir=None):
-    return convert_image(input_path, 'BMP', output_dir)
+# Register converters with factory
+ConverterFactory.register('convert_image', convert_image)
+ConverterFactory.register('convert_from_gif', convert_from_gif)
