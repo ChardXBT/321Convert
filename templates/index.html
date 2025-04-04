@@ -297,11 +297,12 @@
                             <a href="${data.download_url}" class="download-btn" download>Download Converted Image</a>
                         `;
 
-                        // If there's a preview URL, show it
+                        // Check if there's a preview URL available
                         if (data.preview_url) {
+                            const safePreviewUrl = data.preview_url;
                             resultContentDiv.innerHTML += `
                                 <div class="preview-image">
-                                    <img src="${data.preview_url}" alt="Converted image preview">
+                                    <img src="${safePreviewUrl}" alt="Converted image preview">
                                 </div>
                             `;
                         }
@@ -352,15 +353,16 @@
                             resultContentDiv.innerHTML = `
                                 <div class="ocr-result">
                                     <h4>Extracted Text:</h4>
-                                    <pre>${data.text}</pre>
+                                    <pre>${data.text || ''}</pre>
                                     <a href="${data.download_url}" class="download-btn" download>Download Text File</a>
                                 </div>
                             `;
                         } else if (conversion === 'text_to_html') {
+                            const safeHtmlPreview = data.html_preview || '';
                             resultContentDiv.innerHTML = `
                                 <div class="html-preview">
                                     <h4>HTML Preview:</h4>
-                                    <iframe srcdoc="${data.html_preview}" style="width: 100%; height: 300px; border: 1px solid #ddd;"></iframe>
+                                    <iframe srcdoc="${safeHtmlPreview}" style="width: 100%; height: 300px; border: 1px solid #ddd;"></iframe>
                                     <a href="${data.download_url}" class="download-btn" download>Download HTML File</a>
                                 </div>
                             `;

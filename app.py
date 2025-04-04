@@ -1,11 +1,14 @@
-import os
-import shutil
+# import os
+# import shutil
 from flask import Flask, render_template, request, send_file, jsonify, url_for
-import io
+# import io
 from pathlib import Path
+import time
+import threading
+import atexit
 
 # Import needed for converter registration
-from core.converter_factory import ConverterFactory
+# from core.converter_factory import ConverterFactory
 # Import conversions to register all converters (side effect import)
 from conversions import *  # noqa: F401
 
@@ -13,9 +16,14 @@ app = Flask(__name__)
 
 UPLOAD_FOLDER = 'uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+# Set file expiration time (in seconds)
+FILE_EXPIRATION = 3600  # 1 hour
 
 # Ensure uploads folder exists
 Path(UPLOAD_FOLDER).mkdir(exist_ok=True)
+
+# Dictionary to track uploaded files and their timestamp
+file_tracker = {}
 
 # Mapping for format names and their internal PIL names
 FORMAT_MAPPING = {
@@ -47,35 +55,70 @@ MIME_TYPES = {
 }
 
 
-def cleanup_upload_folder():
-    """Remove all files in the upload folder"""
-    for item in Path(UPLOAD_FOLDER).glob('*'):
-        try:
-            if item.is_file() or item.is_symlink():
-                item.unlink()
-            elif item.is_dir():
-                shutil.rmtree(item)
-        except OSError as e:
-            print(f'Failed to delete {item}: {e}')
+def cleanup_files():
+    """Clean up expired files in the uploads folder"""
+    while True:
+        current_time = time.time()
+        expired_files = []
+
+        # Find expired files
+        for filepath, timestamp in list(file_tracker.items()):
+            if current_time - timestamp > FILE_EXPIRATION:
+                expired_files.append(filepath)
+
+        # Remove expired files
+        for filepath in expired_files:
+            try:
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+                file_tracker.pop(filepath, None)
+                print(f"Removed expired file: {filepath}")
+            except Exception as e:
+                print(f"Error removing file {filepath}: {e}")
+
+        # Sleep for 5 minutes before checking again
+        time.sleep(300)
+
+
+def track_file(filepath):
+    """Add file to tracking dictionary with current timestamp"""
+    file_tracker[filepath] = time.time()
+
+
+def cleanup_all_files():
+    """Remove all files in uploads folder when app shuts down"""
+    try:
+        for filename in os.listdir(app.config['UPLOAD_FOLDER']):
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            if os.path.isfile(file_path):
+                os.remove(file_path)
+        print("All files cleaned up on application shutdown")
+    except Exception as e:
+        print(f"Error during shutdown cleanup: {e}")
 
 
 @app.route('/', methods=['GET'])
 def index():
-    # Clean up any existing files when the home page is loaded
-    cleanup_upload_folder()
     return render_template('index.html')
 
 
 # Create routes to serve the converted files
 @app.route('/downloads/<filename>')
 def download_file(filename):
-    return send_file(os.path.join(app.config['UPLOAD_FOLDER'], filename),
-                     as_attachment=True)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    # Reset file timer on download - user is still active
+    if filepath in file_tracker:
+        file_tracker[filepath] = time.time()
+    return send_file(filepath, as_attachment=True)
 
 
 @app.route('/previews/<filename>')
 def preview_file(filename):
-    return send_file(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    # Reset file timer on preview - user is still active
+    if filepath in file_tracker:
+        file_tracker[filepath] = time.time()
+    return send_file(filepath)
 
 
 @app.route('/convert', methods=['POST'])
@@ -92,6 +135,9 @@ def convert_image_route():
         filename = f"original_{os.path.basename(file.filename)}"
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
+
+        # Track the new file
+        track_file(filepath)
 
         try:
             input_format = request.form['input_format'].lower()
@@ -119,6 +165,9 @@ def convert_image_route():
                     quality=int(request.form.get('quality', 80))
                 )
 
+            # Track the converted file
+            track_file(converted_filepath)
+
             # Generate unique filename for converted file
             converted_filename = os.path.basename(converted_filepath)
 
@@ -133,12 +182,6 @@ def convert_image_route():
             })
 
         except Exception as e:
-            # Clean up any files that might have been created
-            if 'filepath' in locals():
-                try:
-                    os.remove(filepath)
-                except OSError:
-                    pass
             return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -156,6 +199,9 @@ def convert_pdf_route():
         filename = f"original_{os.path.basename(file.filename)}"
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
+
+        # Track the new file
+        track_file(filepath)
 
         try:
             conversion_type = request.form['conversion_type']
@@ -195,6 +241,9 @@ def convert_pdf_route():
                     with open(text_file, 'w', encoding='utf-8') as f:
                         f.write(result)
 
+                    # Track the text file
+                    track_file(text_file)
+
                     download_url = url_for('download_file', filename=os.path.basename(text_file))
                     return jsonify({
                         "success": True,
@@ -204,12 +253,19 @@ def convert_pdf_route():
             elif conversion_type == 'pdf_to_images':
                 # For PDF to images, return URLs for each image
                 if isinstance(result, list):
+                    # Track each image file
+                    for img_path in result:
+                        track_file(img_path)
+
                     # Create a zip file containing all results for bulk download
                     import zipfile
                     zip_path = os.path.join(app.config['UPLOAD_FOLDER'], "converted_images.zip")
                     with zipfile.ZipFile(zip_path, 'w') as zipf:
                         for file_path in result:
                             zipf.write(file_path, os.path.basename(file_path))
+
+                    # Track the zip file
+                    track_file(zip_path)
 
                     # Create image URLs
                     images = []
@@ -229,18 +285,28 @@ def convert_pdf_route():
             else:
                 # For other operations that result in a single file
                 if isinstance(result, str) and os.path.isfile(result):
+                    # Track the result file
+                    track_file(result)
+
                     download_url = url_for('download_file', filename=os.path.basename(result))
                     return jsonify({
                         "success": True,
                         "download_url": download_url
                     })
                 elif isinstance(result, list) and all(os.path.isfile(f) for f in result):
+                    # Track each file in the result
+                    for file_path in result:
+                        track_file(file_path)
+
                     # Create a zip file containing all results
                     import zipfile
                     zip_path = os.path.join(app.config['UPLOAD_FOLDER'], "converted_files.zip")
                     with zipfile.ZipFile(zip_path, 'w') as zipf:
                         for file_path in result:
                             zipf.write(file_path, os.path.basename(file_path))
+
+                    # Track the zip file
+                    track_file(zip_path)
 
                     download_url = url_for('download_file', filename=os.path.basename(zip_path))
                     return jsonify({
@@ -269,6 +335,9 @@ def convert_document_route():
         filename = f"original_{os.path.basename(file.filename)}"
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
+
+        # Track the new file
+        track_file(filepath)
 
         try:
             conversion_type = request.form['conversion_type']
@@ -303,6 +372,10 @@ def convert_document_route():
             # Perform conversion
             result = ConverterFactory.convert(conversion_type, filepath, **params)
 
+            # Track the output file
+            if os.path.exists(output_file):
+                track_file(output_file)
+
             # Handle different return types based on conversion type
             if conversion_type == 'image_to_text':
                 # For OCR, return the extracted text and a download link
@@ -311,6 +384,9 @@ def convert_document_route():
                     # If the result is text, save it to a file
                     with open(text_file, 'w', encoding='utf-8') as f:
                         f.write(result)
+
+                    # Track the text file
+                    track_file(text_file)
 
                 download_url = url_for('download_file', filename=os.path.basename(text_file))
                 return jsonify({
@@ -360,18 +436,14 @@ def get_available_converters():
     return jsonify(list(converters.keys()))
 
 
-#@app.teardown_appcontext
-#def cleanup_on_shutdown(exc=None):
-    #"""Ensure all files are cleaned up when the application context ends"""
-  #  if exc is not None:
- #       print(f"Exception during request: {exc}")
- #   cleanup_upload_folder()
+# Register cleanup on shutdown
+atexit.register(cleanup_all_files)
 
+# Start cleanup thread
+cleanup_thread = threading.Thread(target=cleanup_files, daemon=True)
+cleanup_thread.start()
 
 if __name__ == "__main__":
-    # Ensure clean uploads folder on startup
-    cleanup_upload_folder()
-
     # Use environment variables for configuration
     port = int(os.environ.get('PORT', 5000))
     debug = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'

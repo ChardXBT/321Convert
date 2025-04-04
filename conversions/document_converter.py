@@ -1,5 +1,4 @@
 import os
-import fitz  # PyMuPDF for PDF operations
 import pandas as pd
 import pytesseract
 from PIL import Image

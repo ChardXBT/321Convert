@@ -1,6 +1,5 @@
 import os
 from PIL import Image
-import io
 from core.converter_factory import ConverterFactory
 
 
@@ -30,12 +29,7 @@ def convert_image(input_path, output_format, **kwargs):
             img = background
 
         # Save with appropriate parameters
-        if output_format in ('JPEG', 'WEBP'):
-            img.save(output_path, output_format, quality=quality, optimize=True)
-        elif output_format == 'PNG':
-            img.save(output_path, output_format, optimize=True)
-        else:
-            img.save(output_path, output_format)
+        save_image(img, output_path, output_format, quality)
 
     return output_path
 
@@ -67,14 +61,26 @@ def convert_from_gif(input_path, output_format, **kwargs):
             img = img.convert('RGB')
 
         # Save with appropriate parameters
-        if output_format in ('JPEG', 'WEBP'):
-            img.save(output_path, output_format, quality=quality, optimize=True)
-        elif output_format == 'PNG':
-            img.save(output_path, output_format, optimize=True)
-        else:
-            img.save(output_path, output_format)
+        save_image(img, output_path, output_format, quality)
 
     return output_path
+
+
+def save_image(img, output_path, output_format, quality):
+    """
+    Helper function to save an image with the appropriate parameters
+
+    :param img: PIL Image object
+    :param output_path: Path where the image will be saved
+    :param output_format: Format to save the image in
+    :param quality: Quality setting for JPEG/WEBP formats
+    """
+    if output_format in ('JPEG', 'WEBP'):
+        img.save(output_path, output_format, quality=quality, optimize=True)
+    elif output_format == 'PNG':
+        img.save(output_path, output_format, optimize=True)
+    else:
+        img.save(output_path, output_format)
 
 
 # Register converters with factory
