@@ -1,256 +1,182 @@
 import os
-from typing import Optional
-
+import fitz  # PyMuPDF for PDF operations
 import pandas as pd
-import pdfkit
 import pytesseract
 from PIL import Image
-from docx import Document
-from fpdf import FPDF
-import fitz  # PyMuPDF
-
 from core.converter_factory import ConverterFactory
 
 
-def docx_to_pdf(docx_path: str, output_path: Optional[str] = None) -> str:
+def docx_to_pdf(docx_path, **kwargs):
     """
-    Convert a DOCX file to PDF
+    Convert DOCX to PDF using external library (requires python-docx2pdf)
 
-    :param docx_path: Path to the DOCX file
-    :param output_path: Path for the output PDF file
-    :return: Path to the created PDF file
+    Note: This is a placeholder. You'll need to install docx2pdf or another library
     """
+    output_path = kwargs.get('output_path')
+
     try:
-        # Try to use docx2pdf if available
         from docx2pdf import convert
-
-        if output_path is None:
-            output_path = os.path.splitext(docx_path)[0] + ".pdf"
-
         convert(docx_path, output_path)
         return output_path
-
     except ImportError:
-        # Fallback to using pypandoc if available
-        try:
-            import pypandoc
-
-            if output_path is None:
-                output_path = os.path.splitext(docx_path)[0] + ".pdf"
-
-            pypandoc.convert_file(docx_path, 'pdf', outputfile=output_path)
-            return output_path
-
-        except ImportError:
-            raise ImportError("Neither docx2pdf nor pypandoc is installed. Please install one of these packages.")
+        raise ImportError("docx2pdf library is required for DOCX to PDF conversion")
 
 
-def html_to_pdf(html_path: str, output_path: Optional[str] = None) -> str:
+def html_to_pdf(html_path, **kwargs):
     """
-    Convert an HTML file to PDF
+    Convert HTML to PDF using external library (requires pdfkit)
 
-    :param html_path: Path to the HTML file
-    :param output_path: Path for the output PDF file
-    :return: Path to the created PDF file
+    Note: This is a placeholder. You'll need to install pdfkit and wkhtmltopdf
     """
-    if output_path is None:
-        output_path = os.path.splitext(html_path)[0] + ".pdf"
+    output_path = kwargs.get('output_path')
 
-    # Convert HTML to PDF using pdfkit (wkhtmltopdf wrapper)
-    pdfkit.from_file(html_path, output_path)
+    try:
+        import pdfkit
+        pdfkit.from_file(html_path, output_path)
+        return output_path
+    except ImportError:
+        raise ImportError("pdfkit library is required for HTML to PDF conversion")
 
-    return output_path
 
-
-def excel_to_pdf(excel_path: str, output_path: Optional[str] = None,
-                 sheet_name: Optional[str] = None) -> str:
+def excel_to_pdf(excel_path, **kwargs):
     """
-    Convert an Excel file to PDF
+    Convert Excel to PDF
 
-    :param excel_path: Path to the Excel file
-    :param output_path: Path for the output PDF file
-    :param sheet_name: Name of the sheet to convert (None for all sheets)
-    :return: Path to the created PDF file
+    Note: This is a placeholder. Full implementation depends on available libraries.
     """
-    if output_path is None:
-        output_path = os.path.splitext(excel_path)[0] + ".pdf"
+    sheet_name = kwargs.get('sheet_name')
+    output_path = kwargs.get('output_path')
 
-    # Read Excel file
-    if sheet_name:
-        df = pd.read_excel(excel_path, sheet_name=sheet_name)
-        dfs = {sheet_name: df}
-    else:
-        dfs = pd.read_excel(excel_path, sheet_name=None)
+    # Simplified implementation - in a real application you'd use a proper Excel to PDF converter
+    try:
+        # Read the Excel file
+        if sheet_name:
+            df = pd.read_excel(excel_path, sheet_name=sheet_name)
+        else:
+            df = pd.read_excel(excel_path)
 
-    # Create PDF
-    pdf = FPDF()
+        # Convert to HTML first
+        html_file = os.path.join(os.path.dirname(output_path), "temp.html")
+        df.to_html(html_file)
 
-    # Process each sheet
-    for sheet, data in dfs.items():
-        pdf.add_page()
-        pdf.set_font("Arial", size=12)
+        # Then convert HTML to PDF
+        import pdfkit
+        pdfkit.from_file(html_file, output_path)
 
-        # Add sheet name as title
-        pdf.cell(200, 10, f"Sheet: {sheet}", ln=True, align='C')
-        pdf.ln(5)
+        # Clean up temporary file
+        if os.path.exists(html_file):
+            os.remove(html_file)
 
-        # Get column headers
-        cols = data.columns
-        col_widths = [40] * len(cols)  # Simple fixed width
-
-        # Add headers
-        for i, col in enumerate(cols):
-            pdf.cell(col_widths[i], 10, str(col), border=1)
-        pdf.ln()
-
-        # Add data rows
-        for _, row in data.iterrows():
-            for i, col in enumerate(cols):
-                value = row[col]
-                # Convert various data types to string
-                if pd.isna(value):
-                    value = ""
-                else:
-                    value = str(value)
-                pdf.cell(col_widths[i], 10, value[:20], border=1)
-            pdf.ln()
-
-    # Save the PDF
-    pdf.output(output_path)
-
-    return output_path
+        return output_path
+    except ImportError:
+        raise ImportError("pandas and pdfkit libraries are required for Excel to PDF conversion")
 
 
-def image_to_text(image_path: str) -> str:
+def pdf_to_docx(pdf_path, **kwargs):
     """
-    Extract text from an image using OCR
+    Convert PDF to DOCX
 
-    :param image_path: Path to the image file
-    :return: Extracted text
+    Note: This is a placeholder. You'd need a library like pdf2docx
     """
-    # Use pytesseract for OCR
-    image = Image.open(image_path)
-    text = pytesseract.image_to_string(image)
+    output_path = kwargs.get('output_path')
 
-    return text
+    try:
+        from pdf2docx import Converter
+        print(f"[DEBUG] Input PDF path: {pdf_path}")
+        print(f"[DEBUG] Output DOCX path: {output_path}")
 
+        cv = Converter(pdf_path)
+        cv.convert(output_path)
+        cv.close()
 
-def pdf_to_docx(pdf_path: str, output_path: Optional[str] = None) -> str:
-    """
-    Convert a PDF file to DOCX
+        print(f"[DEBUG] Output file exists: {os.path.exists(output_path)}")
+        print(f"[DEBUG] Output absolute path: {os.path.abspath(output_path)}")
 
-    :param pdf_path: Path to the PDF file
-    :param output_path: Path for the output DOCX file
-    :return: Path to the created DOCX file
-    """
-    if output_path is None:
-        output_path = os.path.splitext(pdf_path)[0] + ".docx"
-
-    # Create a new Word document
-    doc = Document()
-
-    # Open PDF with PyMuPDF
-    pdf_document = fitz.open(pdf_path)
-
-    for page_num in range(len(pdf_document)):
-        page = pdf_document[page_num]
-
-        # ✅ FIX: Use "text" instead of "blocks" to extract text properly
-        text = page.get_text("text") if hasattr(page, "get_text") else ""
-
-        if not text.strip():  # If empty, try using blocks
-            if hasattr(page, "get_text"):  # Ensure get_text exists
-                blocks = page.get_text("blocks")
-                if blocks:  # Ensure blocks are retrieved
-                    text = "\n\n".join(block[4] for block in blocks if len(block) > 4)
-
-        # Add page number as heading
-        doc.add_heading(f"Page {page_num + 1}", level=1)
-
-        # Add extracted text to Word
-        for para in text.split("\n\n"):
-            if para.strip():
-                doc.add_paragraph(para)
-
-    # Save the Word document
-    doc.save(output_path)
-
-    return output_path
+        return output_path
+    except ImportError:
+        raise ImportError("pdf2docx library is required for PDF to DOCX conversion")
 
 
-def create_csv_from_excel(excel_path: str, output_path: Optional[str] = None,
-                          sheet_name: Optional[str] = None) -> str:
-    """
-    Convert an Excel file to CSV
+def create_csv_from_excel(excel_path, **kwargs):
+    """Convert Excel to CSV"""
+    sheet_name = kwargs.get('sheet_name')
+    output_path = kwargs.get('output_path')
 
-    :param excel_path: Path to the Excel file
-    :param output_path: Path for the output CSV file
-    :param sheet_name: Name of the sheet to convert (required)
-    :return: Path to the created CSV file
-    """
-    if sheet_name is None:
-        # Use the first sheet if none specified
-        sheet_name = pd.ExcelFile(excel_path).sheet_names[0]
+    try:
+        # Read the Excel file
+        if sheet_name:
+            df = pd.read_excel(excel_path, sheet_name=sheet_name)
+        else:
+            df = pd.read_excel(excel_path)
 
-    if output_path is None:
-        base_name = os.path.splitext(os.path.basename(excel_path))[0]
-        output_path = os.path.join(os.path.dirname(excel_path), f"{base_name}_{sheet_name}.csv")
-
-    # Read Excel and write to CSV
-    df = pd.read_excel(excel_path, sheet_name=sheet_name)
-    df.to_csv(output_path, index=False)
-
-    return output_path
+        # Save as CSV
+        df.to_csv(output_path, index=False)
+        return output_path
+    except Exception as e:
+        raise ValueError(f"Error converting Excel to CSV: {str(e)}")
 
 
-def text_to_html(text_path: str, output_path: Optional[str] = None,
-                 title: str = "Converted Document") -> str:
-    """
-    Convert a plain text file to HTML
+def text_to_html(text_path, **kwargs):
+    """Convert plain text to HTML"""
+    output_path = kwargs.get('output_path')
+    title = kwargs.get('title', 'Converted Document')
 
-    :param text_path: Path to the text file
-    :param output_path: Path for the output HTML file
-    :param title: Title for the HTML document
-    :return: Path to the created HTML file
-    """
-    if output_path is None:
-        output_path = os.path.splitext(text_path)[0] + ".html"
+    try:
+        # Read the text file
+        with open(text_path, 'r', encoding='utf-8') as f:
+            text_content = f.read()
 
-    # Read the text file
-    with open(text_path, 'r', encoding='utf-8') as file:
-        content = file.read()
-
-    # Fix possible typo at line 224 with proper HTML content creation
-    html_content = f"""<!DOCTYPE html>
+        # Convert to simple HTML
+        html_content = f"""<!DOCTYPE html>
 <html>
 <head>
     <title>{title}</title>
+    <meta charset="UTF-8">
     <style>
-        body {{ font-family: Arial, sans-serif; line-height: 1.6; margin: 40px; }}
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 20px; }}
         h1 {{ color: #333; }}
-        p {{ margin-bottom: 15px; }}
+        p {{ margin-bottom: 16px; }}
     </style>
 </head>
 <body>
     <h1>{title}</h1>
-    {''.join(f'<p>{para}</p>' for para in content.split('\n\n') if para.strip())}
+    {''.join(f'<p>{paragraph}</p>' for paragraph in text_content.split('\n\n') if paragraph.strip())}
 </body>
-</html>
-"""
+</html>"""
 
-    # Write HTML file
-    with open(output_path, 'w', encoding='utf-8') as file:
-        file.write(html_content)
+        # Save HTML file
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
 
-    return output_path
+        return output_path
+    except Exception as e:
+        raise ValueError(f"Error converting text to HTML: {str(e)}")
 
 
-# Fix for Unexpected argument error
-# Instead of using a function, register converters directly
+def image_to_text(image_path, **kwargs):
+    """Extract text from image using OCR"""
+    output_path = kwargs.get('output_path')
+
+    try:
+        # Use pytesseract for OCR
+        img = Image.open(image_path)
+        text = pytesseract.image_to_string(img)
+
+        # Save to file if output path is provided
+        if output_path:
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(text)
+
+        return text
+    except Exception as e:
+        raise ValueError(f"Error extracting text from image: {str(e)}")
+
+
+# Register document converters
 ConverterFactory.register('docx_to_pdf', docx_to_pdf)
 ConverterFactory.register('html_to_pdf', html_to_pdf)
 ConverterFactory.register('excel_to_pdf', excel_to_pdf)
-ConverterFactory.register('image_to_text', image_to_text)
 ConverterFactory.register('pdf_to_docx', pdf_to_docx)
 ConverterFactory.register('create_csv_from_excel', create_csv_from_excel)
 ConverterFactory.register('text_to_html', text_to_html)
+ConverterFactory.register('image_to_text', image_to_text)

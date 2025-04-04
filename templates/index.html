@@ -6,10 +6,58 @@
     <title>Document Converter</title>
     <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        .hidden {
+            display: none;
+        }
+
+        .notification {
+            padding: 10px 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 2s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
 </head>
 <body>
     <div class="container">
         <h1>Document Converter</h1>
+
+        <!-- Notification area for displaying messages -->
+        <div id="notification" class="notification"></div>
 
         <div class="tab">
             <button class="tab-links active" onclick="openTab(event, 'imageTab')">Image Conversion</button>
@@ -20,7 +68,13 @@
         <!-- Image Conversion Tab -->
         <div id="imageTab" class="tab-content" style="display: block;">
             <h2>Image Conversion</h2>
-            <form action="/convert" method="post" enctype="multipart/form-data">
+
+            <div id="imageLoading" class="loading">
+                <div class="loading-spinner"></div>
+                <p>Processing your image...</p>
+            </div>
+
+            <form id="imageConversionForm" action="/convert" method="post" enctype="multipart/form-data">
                 <div class="file-upload">
                     <input type="file" id="image" name="image" accept="image/*" required>
                     <label for="image" class="file-upload-label">Select Image</label>
@@ -59,16 +113,28 @@
 
                 <input type="submit" value="Convert Image">
             </form>
+
+            <div id="imageResult" class="result-container hidden">
+                <h3>Conversion Result</h3>
+                <div id="imageResultContent"></div>
+            </div>
         </div>
 
         <!-- PDF Tools Tab -->
         <div id="pdfTab" class="tab-content">
             <h2>PDF Tools</h2>
-            <form action="/pdf/convert" method="post" enctype="multipart/form-data">
+
+            <div id="pdfLoading" class="loading">
+                <div class="loading-spinner"></div>
+                <p>Processing your PDF...</p>
+            </div>
+
+            <form id="pdfToolsForm" action="/pdf/convert" method="post" enctype="multipart/form-data">
                 <div class="file-upload">
                     <input type="file" id="pdf_file" name="file" accept=".pdf,.jpg,.jpeg,.png" required>
                     <label for="pdf_file" class="file-upload-label">Select PDF File</label>
                     <p>Or drag and drop files here</p>
+                    <div class="pdf-preview"></div>
                 </div>
 
                 <label for="pdf_conversion">Operation:</label>
@@ -136,16 +202,28 @@
 
                 <input type="submit" value="Process PDF">
             </form>
+
+            <div id="pdfResult" class="result-container hidden">
+                <h3>PDF Processing Result</h3>
+                <div id="pdfResultContent"></div>
+            </div>
         </div>
 
         <!-- Document Conversion Tab -->
         <div id="docTab" class="tab-content">
             <h2>Document Conversion</h2>
-            <form action="/document/convert" method="post" enctype="multipart/form-data">
+
+            <div id="docLoading" class="loading">
+                <div class="loading-spinner"></div>
+                <p>Processing your document...</p>
+            </div>
+
+            <form id="docConversionForm" action="/document/convert" method="post" enctype="multipart/form-data">
                 <div class="file-upload">
                     <input type="file" id="doc_file" name="file" accept=".docx,.xlsx,.html,.txt,.pdf" required>
                     <label for="doc_file" class="file-upload-label">Select Document</label>
                     <p>Or drag and drop files here</p>
+                    <div class="doc-preview"></div>
                 </div>
 
                 <label for="doc_conversion">Conversion Type:</label>
@@ -174,6 +252,11 @@
 
                 <input type="submit" value="Convert Document">
             </form>
+
+            <div id="docResult" class="result-container hidden">
+                <h3>Document Conversion Result</h3>
+                <div id="docResultContent"></div>
+            </div>
         </div>
     </div>
 
@@ -234,6 +317,18 @@
             }
         }
 
+        function showNotification(message, type) {
+            const notification = document.getElementById('notification');
+            notification.innerHTML = message;
+            notification.className = 'notification ' + type;
+            notification.style.display = 'block';
+
+            // Auto hide after 5 seconds
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 5000);
+        }
+
         // Add image preview functionality
         document.addEventListener('DOMContentLoaded', function() {
             const fileInputs = document.querySelectorAll('input[type="file"]');
@@ -241,21 +336,234 @@
             fileInputs.forEach(input => {
                 input.addEventListener('change', function(e) {
                     const file = e.target.files[0];
-                    if (file && file.type.match('image.*')) {
+                    if (!file) return;
+
+                    const fileUploadContainer = input.closest('.file-upload');
+                    const previewDiv = fileUploadContainer.querySelector('.image-preview') ||
+                                       fileUploadContainer.querySelector('.pdf-preview') ||
+                                       fileUploadContainer.querySelector('.doc-preview');
+
+                    if (!previewDiv) return;
+
+                    if (file.type.match('image.*')) {
                         const reader = new FileReader();
-                        const previewDiv = input.closest('.file-upload').querySelector('.image-preview');
-
-                        if (!previewDiv) return;
-
                         reader.onload = function(e) {
                             previewDiv.innerHTML = `
-                                <img src="${e.target.result}" alt="Preview">
+                                <img src="${e.target.result}" alt="Preview" style="max-width: 100%; max-height: 200px;">
                                 <p>${file.name}</p>
                             `;
                         };
-
                         reader.readAsDataURL(file);
+                    } else {
+                        // Display icon based on file type
+                        let iconClass = 'file';
+
+                        if (file.name.endsWith('.pdf')) {
+                            iconClass = 'file-pdf';
+                        } else if (file.name.endsWith('.docx') || file.name.endsWith('.doc')) {
+                            iconClass = 'file-word';
+                        } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+                            iconClass = 'file-excel';
+                        }
+
+                        previewDiv.innerHTML = `
+                            <div class="file-icon ${iconClass}"></div>
+                            <p>${file.name}</p>
+                        `;
                     }
+                });
+            });
+
+            // Handle Image Conversion Form submission
+            document.getElementById('imageConversionForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+
+                const formData = new FormData(this);
+                const loadingDiv = document.getElementById('imageLoading');
+                const resultDiv = document.getElementById('imageResult');
+                const resultContentDiv = document.getElementById('imageResultContent');
+
+                // Show loading spinner
+                loadingDiv.style.display = 'block';
+                resultDiv.classList.add('hidden');
+
+                fetch('/convert', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    loadingDiv.style.display = 'none';
+
+                    if (data.success) {
+                        showNotification('Image converted successfully!', 'success');
+                        resultDiv.classList.remove('hidden');
+
+                        // Create download link
+                        resultContentDiv.innerHTML = `
+                            <p>Your image has been successfully converted!</p>
+                            <a href="${data.download_url}" class="download-btn" download>Download Converted Image</a>
+                        `;
+
+                        // If there's a preview URL, show it
+                        if (data.preview_url) {
+                            resultContentDiv.innerHTML += `
+                                <div class="preview-image">
+                                    <img src="${data.preview_url}" alt="Converted image preview">
+                                </div>
+                            `;
+                        }
+                    } else {
+                        showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
+                    }
+                })
+                .catch(error => {
+                    loadingDiv.style.display = 'none';
+                    showNotification('Error: ' + error.message, 'error');
+                });
+            });
+
+            // Handle PDF Tools Form submission
+            document.getElementById('pdfToolsForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+
+                const formData = new FormData(this);
+                const loadingDiv = document.getElementById('pdfLoading');
+                const resultDiv = document.getElementById('pdfResult');
+                const resultContentDiv = document.getElementById('pdfResultContent');
+
+                // Show loading spinner
+                loadingDiv.style.display = 'block';
+                resultDiv.classList.add('hidden');
+
+                fetch('/pdf/convert', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    loadingDiv.style.display = 'none';
+
+                    if (data.success) {
+                        showNotification('PDF processed successfully!', 'success');
+                        resultDiv.classList.remove('hidden');
+
+                        // Create result content based on operation type
+                        const operation = document.getElementById('pdf_conversion').value;
+
+                        if (operation === 'extract_text_from_pdf') {
+                            resultContentDiv.innerHTML = `
+                                <div class="extracted-text">
+                                    <h4>Extracted Text:</h4>
+                                    <pre>${data.text}</pre>
+                                    <a href="${data.download_url}" class="download-btn" download>Download Text File</a>
+                                </div>
+                            `;
+                        } else if (operation === 'pdf_to_images') {
+                            let imagesHtml = '<div class="image-gallery">';
+                            data.images.forEach((img, index) => {
+                                imagesHtml += `
+                                    <div class="image-item">
+                                        <img src="${img.url}" alt="Page ${index + 1}">
+                                        <a href="${img.url}" download="page_${index + 1}.${data.format.toLowerCase()}" class="download-btn">Download</a>
+                                    </div>
+                                `;
+                            });
+                            imagesHtml += '</div>';
+
+                            resultContentDiv.innerHTML = `
+                                <p>${data.images.length} images extracted from PDF</p>
+                                <a href="${data.download_all_url}" class="download-btn" download>Download All Images (ZIP)</a>
+                                ${imagesHtml}
+                            `;
+                        } else {
+                            resultContentDiv.innerHTML = `
+                                <p>Your PDF has been successfully processed!</p>
+                                <a href="${data.download_url}" class="download-btn" download>Download Processed PDF</a>
+                            `;
+                        }
+                    } else {
+                        showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
+                    }
+                })
+                .catch(error => {
+                    loadingDiv.style.display = 'none';
+                    showNotification('Error: ' + error.message, 'error');
+                });
+            });
+
+            // Handle Document Conversion Form submission
+            document.getElementById('docConversionForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+
+                const formData = new FormData(this);
+                const loadingDiv = document.getElementById('docLoading');
+                const resultDiv = document.getElementById('docResult');
+                const resultContentDiv = document.getElementById('docResultContent');
+
+                // Show loading spinner
+                loadingDiv.style.display = 'block';
+                resultDiv.classList.add('hidden');
+
+                fetch('/document/convert', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    loadingDiv.style.display = 'none';
+
+                    if (data.success) {
+                        showNotification('Document converted successfully!', 'success');
+                        resultDiv.classList.remove('hidden');
+
+                        // Create result content based on conversion type
+                        const conversion = document.getElementById('doc_conversion').value;
+
+                        if (conversion === 'image_to_text') {
+                            resultContentDiv.innerHTML = `
+                                <div class="ocr-result">
+                                    <h4>Extracted Text:</h4>
+                                    <pre>${data.text}</pre>
+                                    <a href="${data.download_url}" class="download-btn" download>Download Text File</a>
+                                </div>
+                            `;
+                        } else if (conversion === 'text_to_html') {
+                            resultContentDiv.innerHTML = `
+                                <div class="html-preview">
+                                    <h4>HTML Preview:</h4>
+                                    <iframe srcdoc="${data.html_preview}" style="width: 100%; height: 300px; border: 1px solid #ddd;"></iframe>
+                                    <a href="${data.download_url}" class="download-btn" download>Download HTML File</a>
+                                </div>
+                            `;
+                        } else {
+                            resultContentDiv.innerHTML = `
+                                <p>Your document has been successfully converted!</p>
+                                <a href="${data.download_url}" class="download-btn" download>Download Converted Document</a>
+                            `;
+                        }
+                    } else {
+                        showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
+                    }
+                })
+                .catch(error => {
+                    loadingDiv.style.display = 'none';
+                    showNotification('Error: ' + error.message, 'error');
                 });
             });
         });
