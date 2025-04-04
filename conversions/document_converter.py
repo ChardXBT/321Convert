@@ -91,7 +91,7 @@ def excel_to_pdf(excel_path: str, output_path: Optional[str] = None,
         pdf.set_font("Arial", size=12)
 
         # Add sheet name as title
-        pdf.cell(200, 10, txt=f"Sheet: {sheet}", ln=True, align='C')
+        pdf.cell(200, 10, f"Sheet: {sheet}", ln=True, align='C')
         pdf.ln(5)
 
         # Get column headers
@@ -149,21 +149,26 @@ def pdf_to_docx(pdf_path: str, output_path: Optional[str] = None) -> str:
     # Create a new Word document
     doc = Document()
 
-    # Extract text from PDF using PyMuPDF
+    # Open PDF with PyMuPDF
     pdf_document = fitz.open(pdf_path)
 
     for page_num in range(len(pdf_document)):
         page = pdf_document[page_num]
-        # Fix for extract_text method - use the text_page feature
-        text = ""
-        for block in page.get_text("blocks"):
-            text += block[4] + "\n\n"
+
+        # ✅ FIX: Use "text" instead of "blocks" to extract text properly
+        text = page.get_text("text") if hasattr(page, "get_text") else ""
+
+        if not text.strip():  # If empty, try using blocks
+            if hasattr(page, "get_text"):  # Ensure get_text exists
+                blocks = page.get_text("blocks")
+                if blocks:  # Ensure blocks are retrieved
+                    text = "\n\n".join(block[4] for block in blocks if len(block) > 4)
 
         # Add page number as heading
         doc.add_heading(f"Page {page_num + 1}", level=1)
 
-        # Add text as paragraphs
-        for para in text.split('\n\n'):
+        # Add extracted text to Word
+        for para in text.split("\n\n"):
             if para.strip():
                 doc.add_paragraph(para)
 
