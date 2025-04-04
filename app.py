@@ -1,4 +1,5 @@
 # import os
+import os  # Uncomment this as it's needed for file operations
 # import shutil
 from flask import Flask, render_template, request, send_file, jsonify, url_for
 # import io
@@ -8,7 +9,7 @@ import threading
 import atexit
 
 # Import needed for converter registration
-# from core.converter_factory import ConverterFactory
+from core.converter_factory import ConverterFactory  # Uncomment this line - it's crucial
 # Import conversions to register all converters (side effect import)
 from conversions import *  # noqa: F401
 
@@ -109,7 +110,12 @@ def download_file(filename):
     # Reset file timer on download - user is still active
     if filepath in file_tracker:
         file_tracker[filepath] = time.time()
-    return send_file(filepath, as_attachment=True)
+
+    # Get the correct MIME type for the file
+    extension = filename.split('.')[-1].lower()
+    mimetype = MIME_TYPES.get(extension, 'application/octet-stream')
+
+    return send_file(filepath, as_attachment=True, mimetype=mimetype)
 
 
 @app.route('/previews/<filename>')
@@ -118,7 +124,12 @@ def preview_file(filename):
     # Reset file timer on preview - user is still active
     if filepath in file_tracker:
         file_tracker[filepath] = time.time()
-    return send_file(filepath)
+
+    # Get the correct MIME type for the file
+    extension = filename.split('.')[-1].lower()
+    mimetype = MIME_TYPES.get(extension, 'application/octet-stream')
+
+    return send_file(filepath, mimetype=mimetype)
 
 
 @app.route('/convert', methods=['POST'])
@@ -341,6 +352,7 @@ def convert_document_route():
 
         try:
             conversion_type = request.form['conversion_type']
+            print(f"Starting {conversion_type} conversion for {filepath}")
 
             # Get additional parameters
             params = {}
@@ -368,13 +380,29 @@ def convert_document_route():
             ext = output_extensions.get(conversion_type, 'txt')
             output_file = os.path.join(app.config['UPLOAD_FOLDER'], f"{base_name}_converted.{ext}")
             params['output_path'] = output_file
+            print(f"Output will be saved to: {output_file}")
 
-            # Perform conversion
-            result = ConverterFactory.convert(conversion_type, filepath, **params)
+            # Perform conversion - add debugging statements
+            try:
+                print(
+                    f"Calling ConverterFactory.convert with type: {conversion_type}, file: {filepath}, params: {params}")
+                result = ConverterFactory.convert(conversion_type, filepath, **params)
+                print(f"Conversion result: {result}")
+            except Exception as conv_error:
+                print(f"Conversion error: {str(conv_error)}")
+                raise
 
-            # Track the output file
+            # Track the output file if it exists
             if os.path.exists(output_file):
                 track_file(output_file)
+                print(f"Output file exists at {output_file}")
+            else:
+                print(f"Warning: Output file not found at {output_file}")
+                # If result is a file path but different from our expected output_file
+                if isinstance(result, str) and os.path.isfile(result):
+                    output_file = result
+                    track_file(output_file)
+                    print(f"Using result as output file instead: {output_file}")
 
             # Handle different return types based on conversion type
             if conversion_type == 'image_to_text':
@@ -420,12 +448,23 @@ def convert_document_route():
                         "download_url": download_url
                     })
                 else:
-                    return jsonify({
-                        "success": False,
-                        "error": "Conversion failed: Output file not created"
-                    }), 500
+                    # Check if result is a file path that we can use
+                    if isinstance(result, str) and os.path.isfile(result):
+                        download_url = url_for('download_file', filename=os.path.basename(result))
+                        return jsonify({
+                            "success": True,
+                            "download_url": download_url
+                        })
+                    else:
+                        return jsonify({
+                            "success": False,
+                            "error": "Conversion failed: Output file not created"
+                        }), 500
 
         except Exception as e:
+            print(f"Exception in convert_document_route: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return jsonify({"success": False, "error": str(e)}), 500
 
 

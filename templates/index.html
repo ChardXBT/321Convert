@@ -217,6 +217,27 @@
             }, 5000);
         }
 
+        function detectImageFormat(file) {
+            // Get the file extension from the file name
+            const fileName = file.name.toLowerCase();
+            const fileExtension = fileName.substring(fileName.lastIndexOf('.') + 1);
+
+            // Map file extensions to format values in the dropdown
+            const formatMap = {
+                'jpg': 'jpg',
+                'jpeg': 'jpg',
+                'png': 'png',
+                'webp': 'webp',
+                'gif': 'gif',
+                'bmp': 'bmp',
+                'tif': 'tiff',
+                'tiff': 'tiff'
+            };
+
+            // Return the mapped format, defaulting to jpg if not found
+            return formatMap[fileExtension] || 'jpg';
+        }
+
         // Add image preview functionality
         document.addEventListener('DOMContentLoaded', function() {
             const fileInputs = document.querySelectorAll('input[type="file"]');
@@ -231,6 +252,20 @@
                                        fileUploadContainer.querySelector('.doc-preview');
 
                     if (!previewDiv) return;
+
+                    // Auto-detect and set image format if this is the image input
+                    if (input.id === 'image' && file.type.match('image.*')) {
+                        const inputFormatSelect = document.getElementById('input_format');
+                        const detectedFormat = detectImageFormat(file);
+
+                        // Set the detected format in the dropdown
+                        for (let i = 0; i < inputFormatSelect.options.length; i++) {
+                            if (inputFormatSelect.options[i].value === detectedFormat) {
+                                inputFormatSelect.selectedIndex = i;
+                                break;
+                            }
+                        }
+                    }
 
                     if (file.type.match('image.*')) {
                         const reader = new FileReader();
