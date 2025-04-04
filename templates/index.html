@@ -61,7 +61,6 @@
 
         <div class="tab">
             <button class="tab-links active" onclick="openTab(event, 'imageTab')">Image Conversion</button>
-            <button class="tab-links" onclick="openTab(event, 'pdfTab')">PDF Tools</button>
             <button class="tab-links" onclick="openTab(event, 'docTab')">Document Conversion</button>
         </div>
 
@@ -117,95 +116,6 @@
             <div id="imageResult" class="result-container hidden">
                 <h3>Conversion Result</h3>
                 <div id="imageResultContent"></div>
-            </div>
-        </div>
-
-        <!-- PDF Tools Tab -->
-        <div id="pdfTab" class="tab-content">
-            <h2>PDF Tools</h2>
-
-            <div id="pdfLoading" class="loading">
-                <div class="loading-spinner"></div>
-                <p>Processing your PDF...</p>
-            </div>
-
-            <form id="pdfToolsForm" action="/pdf/convert" method="post" enctype="multipart/form-data">
-                <div class="file-upload">
-                    <input type="file" id="pdf_file" name="file" accept=".pdf,.jpg,.jpeg,.png" required>
-                    <label for="pdf_file" class="file-upload-label">Select PDF File</label>
-                    <p>Or drag and drop files here</p>
-                    <div class="pdf-preview"></div>
-                </div>
-
-                <label for="pdf_conversion">Operation:</label>
-                <select id="pdf_conversion" name="conversion_type" onchange="showPdfOptions()" required>
-                    <option value="">Select Operation</option>
-                    <option value="pdf_to_images">PDF to Images</option>
-                    <option value="images_to_pdf">Images to PDF</option>
-                    <option value="compress_pdf">Compress PDF</option>
-                    <option value="extract_text_from_pdf">Extract Text</option>
-                    <option value="rotate_pdf_pages">Rotate Pages</option>
-                    <option value="encrypt_pdf">Encrypt PDF</option>
-                    <option value="decrypt_pdf">Decrypt PDF</option>
-                </select>
-
-                <!-- PDF to Images Options -->
-                <div id="pdfToImagesOptions" class="hidden pdf-options">
-                    <label for="dpi">DPI:</label>
-                    <input type="number" id="dpi" name="dpi" min="72" max="600" value="300">
-
-                    <label for="format">Output Format:</label>
-                    <select id="format" name="format">
-                        <option value="PNG">PNG</option>
-                        <option value="JPEG">JPEG</option>
-                        <option value="BMP">BMP</option>
-                    </select>
-                </div>
-
-                <!-- Compress PDF Options -->
-                <div id="compressPdfOptions" class="hidden pdf-options">
-                    <label for="compress_quality">Quality:</label>
-                    <select id="compress_quality" name="quality">
-                        <option value="high">High</option>
-                        <option value="medium" selected>Medium</option>
-                        <option value="low">Low</option>
-                    </select>
-                </div>
-
-                <!-- Rotate PDF Options -->
-                <div id="rotatePdfOptions" class="hidden pdf-options">
-                    <label for="rotation">Rotation Angle:</label>
-                    <select id="rotation" name="rotation">
-                        <option value="90">90° Clockwise</option>
-                        <option value="180">180°</option>
-                        <option value="270">90° Counter-clockwise</option>
-                    </select>
-
-                    <label for="pages">Pages (comma-separated, leave empty for all):</label>
-                    <input type="text" id="pages" name="pages" placeholder="e.g., 1,3,5-7">
-                </div>
-
-                <!-- Encrypt PDF Options -->
-                <div id="encryptPdfOptions" class="hidden pdf-options">
-                    <label for="encrypt_password">User Password:</label>
-                    <input type="password" id="encrypt_password" name="password" required>
-
-                    <label for="owner_password">Owner Password (optional):</label>
-                    <input type="password" id="owner_password" name="owner_password">
-                </div>
-
-                <!-- Decrypt PDF Options -->
-                <div id="decryptPdfOptions" class="hidden pdf-options">
-                    <label for="decrypt_password">Password:</label>
-                    <input type="password" id="decrypt_password" name="password" required>
-                </div>
-
-                <input type="submit" value="Process PDF">
-            </form>
-
-            <div id="pdfResult" class="result-container hidden">
-                <h3>PDF Processing Result</h3>
-                <div id="pdfResultContent"></div>
             </div>
         </div>
 
@@ -279,28 +189,6 @@
             evt.currentTarget.className += " active";
         }
 
-        function showPdfOptions() {
-            // Hide all PDF option divs
-            const options = document.getElementsByClassName("pdf-options");
-            for (let i = 0; i < options.length; i++) {
-                options[i].classList.add("hidden");
-            }
-
-            // Show the selected option div
-            const conversion = document.getElementById("pdf_conversion").value;
-            if (conversion === "pdf_to_images") {
-                document.getElementById("pdfToImagesOptions").classList.remove("hidden");
-            } else if (conversion === "compress_pdf") {
-                document.getElementById("compressPdfOptions").classList.remove("hidden");
-            } else if (conversion === "rotate_pdf_pages") {
-                document.getElementById("rotatePdfOptions").classList.remove("hidden");
-            } else if (conversion === "encrypt_pdf") {
-                document.getElementById("encryptPdfOptions").classList.remove("hidden");
-            } else if (conversion === "decrypt_pdf") {
-                document.getElementById("decryptPdfOptions").classList.remove("hidden");
-            }
-        }
-
         function showDocOptions() {
             // Hide all document option divs
             const options = document.getElementsByClassName("doc-options");
@@ -340,7 +228,6 @@
 
                     const fileUploadContainer = input.closest('.file-upload');
                     const previewDiv = fileUploadContainer.querySelector('.image-preview') ||
-                                       fileUploadContainer.querySelector('.pdf-preview') ||
                                        fileUploadContainer.querySelector('.doc-preview');
 
                     if (!previewDiv) return;
@@ -416,80 +303,6 @@
                                 <div class="preview-image">
                                     <img src="${data.preview_url}" alt="Converted image preview">
                                 </div>
-                            `;
-                        }
-                    } else {
-                        showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
-                    }
-                })
-                .catch(error => {
-                    loadingDiv.style.display = 'none';
-                    showNotification('Error: ' + error.message, 'error');
-                });
-            });
-
-            // Handle PDF Tools Form submission
-            document.getElementById('pdfToolsForm').addEventListener('submit', function(e) {
-                e.preventDefault();
-
-                const formData = new FormData(this);
-                const loadingDiv = document.getElementById('pdfLoading');
-                const resultDiv = document.getElementById('pdfResult');
-                const resultContentDiv = document.getElementById('pdfResultContent');
-
-                // Show loading spinner
-                loadingDiv.style.display = 'block';
-                resultDiv.classList.add('hidden');
-
-                fetch('/pdf/convert', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    loadingDiv.style.display = 'none';
-
-                    if (data.success) {
-                        showNotification('PDF processed successfully!', 'success');
-                        resultDiv.classList.remove('hidden');
-
-                        // Create result content based on operation type
-                        const operation = document.getElementById('pdf_conversion').value;
-
-                        if (operation === 'extract_text_from_pdf') {
-                            resultContentDiv.innerHTML = `
-                                <div class="extracted-text">
-                                    <h4>Extracted Text:</h4>
-                                    <pre>${data.text}</pre>
-                                    <a href="${data.download_url}" class="download-btn" download>Download Text File</a>
-                                </div>
-                            `;
-                        } else if (operation === 'pdf_to_images') {
-                            let imagesHtml = '<div class="image-gallery">';
-                            data.images.forEach((img, index) => {
-                                imagesHtml += `
-                                    <div class="image-item">
-                                        <img src="${img.url}" alt="Page ${index + 1}">
-                                        <a href="${img.url}" download="page_${index + 1}.${data.format.toLowerCase()}" class="download-btn">Download</a>
-                                    </div>
-                                `;
-                            });
-                            imagesHtml += '</div>';
-
-                            resultContentDiv.innerHTML = `
-                                <p>${data.images.length} images extracted from PDF</p>
-                                <a href="${data.download_all_url}" class="download-btn" download>Download All Images (ZIP)</a>
-                                ${imagesHtml}
-                            `;
-                        } else {
-                            resultContentDiv.innerHTML = `
-                                <p>Your PDF has been successfully processed!</p>
-                                <a href="${data.download_url}" class="download-btn" download>Download Processed PDF</a>
                             `;
                         }
                     } else {
