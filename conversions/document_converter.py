@@ -3,7 +3,11 @@ import pandas as pd
 import pytesseract
 from PIL import Image
 from core.converter_factory import ConverterFactory
-
+import tempfile
+from pathlib import Path
+from pypdf import PdfReader
+from docx import Document
+from docxcompose.composer import Composer
 
 def docx_to_pdf(docx_path, **kwargs):
     """
@@ -173,29 +177,99 @@ def excel_to_pdf(excel_path, **kwargs):
         raise ValueError(error_message)
 
 
-def pdf_to_docx(pdf_path, **kwargs):
+def pdf_to_docx(pdf_path, output_path=None, chunk_size=3):
     """
-    Convert PDF to DOCX
+    Convert PDF to DOCX using a chunking approach to handle large files.
 
-    Note: This is a placeholder. You'd need a library like pdf2docx
+    Args:
+        pdf_path (str): Path to the input PDF file
+        output_path (str, optional): Path to save the output DOCX file
+        chunk_size (int, optional): Number of pages to process in each chunk
+
+    Returns:
+        str: Path to the output DOCX file
     """
-    output_path = kwargs.get('output_path')
-
     try:
-        from pdf2docx import Converter
-        print(f"[DEBUG] Input PDF path: {pdf_path}")
-        print(f"[DEBUG] Output DOCX path: {output_path}")
+        # Check if output path is provided
+        if output_path is None:
+            output_path = str(Path(pdf_path).with_suffix('.docx'))
 
-        cv = Converter(pdf_path)
-        cv.convert(output_path)
-        cv.close()
+        # Create a temp directory for the chunks
+        temp_dir = tempfile.mkdtemp()
+        chunk_files = []
 
-        print(f"[DEBUG] Output file exists: {os.path.exists(output_path)}")
-        print(f"[DEBUG] Output absolute path: {os.path.abspath(output_path)}")
+        # Read the PDF
+        reader = PdfReader(pdf_path)
+        total_pages = len(reader.pages)
+
+        print(f"Converting PDF with {total_pages} pages using chunk size of {chunk_size}")
+
+        # Process the PDF in chunks
+        for start_page in range(0, total_pages, chunk_size):
+            # Create a new Document for this chunk
+            doc = Document()
+
+            # Calculate end page for this chunk
+            end_page = min(start_page + chunk_size, total_pages)
+
+            # Process pages in this chunk
+            for page_num in range(start_page, end_page):
+                page = reader.pages[page_num]
+                text = page.extract_text()
+
+                # Add page number as heading
+                doc.add_heading(f"Page {page_num + 1}", level=2)
+
+                # Add text to document
+                doc.add_paragraph(text)
+
+            # Save this chunk
+            chunk_path = os.path.join(temp_dir, f"chunk_{start_page}.docx")
+            doc.save(chunk_path)
+            chunk_files.append(chunk_path)
+
+            print(f"Processed pages {start_page + 1} to {end_page} of {total_pages}")
+
+        # Merge all chunks
+        if chunk_files:
+            print(f"Merging {len(chunk_files)} chunks into final document")
+            # Use the first chunk as the master document
+            master = Document(chunk_files[0])
+            composer = Composer(master)
+
+            # Add the remaining chunks
+            for chunk_path in chunk_files[1:]:
+                doc = Document(chunk_path)
+                composer.append(doc)
+
+            # Save the final document
+            composer.save(output_path)
+
+            print(f"PDF to DOCX conversion complete: {output_path}")
+        else:
+            # If no chunks were created, create an empty document
+            Document().save(output_path)
+            print("Warning: No content was extracted from the PDF")
+
+        # Clean up temporary files
+        for chunk_path in chunk_files:
+            try:
+                os.remove(chunk_path)
+            except Exception as e:
+                print(f"Error removing temporary file {chunk_path}: {e}")
+
+        try:
+            os.rmdir(temp_dir)
+        except Exception as e:
+            print(f"Error removing temporary directory: {e}")
 
         return output_path
-    except ImportError:
-        raise ImportError("pdf2docx library is required for PDF to DOCX conversion")
+
+    except Exception as e:
+        print(f"Error in pdf_to_docx conversion: {e}")
+        import traceback
+        traceback.print_exc()
+        raise ValueError(f"PDF to DOCX conversion failed: {str(e)}")
 
 
 def create_csv_from_excel(excel_path, **kwargs):
