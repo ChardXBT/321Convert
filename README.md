@@ -70,10 +70,11 @@ A web-based file conversion tool that allows users to convert between different 
 
 ## Future Improvements
 
-- Support for more file types (GIF, BMP, EPUB, etc.)
 - Batch file conversion
 - Cloud storage integration (Google Drive, Dropbox, etc.)
 - Dark mode UI option
+- Fix Excel glitching when converting to PDF and CSV
+
 
 ## Contributions
 
