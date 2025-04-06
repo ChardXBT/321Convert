@@ -6,59 +6,27 @@
     <title>Document Converter</title>
     <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-    <style>
-        .hidden {
-            display: none;
-        }
-
-        .notification {
-            padding: 10px 15px;
-            margin-bottom: 20px;
-            border-radius: 4px;
-            display: none;
-        }
-
-        .success {
-            background-color: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-
-        .error {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-
-        .loading {
-            display: none;
-            text-align: center;
-            margin: 20px 0;
-        }
-
-        .loading-spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #3498db;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            animation: spin 2s linear infinite;
-            margin: 0 auto;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    </style>
+    <!-- Fix: Use CDN URL for Font Awesome instead of locally stored library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/js/all.min.js"></script>
 </head>
 <body>
     <div class="container">
         <h1>Document Converter</h1>
 
+        <!-- Day/Night Toggle Switch -->
+        <div class="theme-switch-wrapper">
+            <span>☀️</span>
+            <label class="theme-switch" for="checkbox">
+                <input type="checkbox" id="checkbox" />
+                <div class="slider round"></div>
+            </label>
+            <span>🌙</span>
+        </div>
+
         <!-- Notification area for displaying messages -->
         <div id="notification" class="notification"></div>
 
+        <!-- Fix: Use proper button structure in tab navigation -->
         <div class="tab">
             <button class="tab-links active" onclick="openTab(event, 'imageTab')">Image Conversion</button>
             <button class="tab-links" onclick="openTab(event, 'docTab')">Document Conversion</button>
@@ -171,6 +139,45 @@
     </div>
 
     <script>
+        // Theme toggle functionality
+        const toggleSwitch = document.querySelector('#checkbox');
+
+        // Check for saved theme preference or use preferred color scheme
+        function loadThemePreference() {
+            const savedTheme = localStorage.getItem('theme');
+
+            if (savedTheme === 'night') {
+                toggleSwitch.checked = true;
+                document.body.classList.add('night-mode');
+            } else if (savedTheme === 'day') {
+                toggleSwitch.checked = false;
+                document.body.classList.remove('night-mode');
+            } else {
+                // Check if user prefers dark mode
+                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    toggleSwitch.checked = true;
+                    document.body.classList.add('night-mode');
+                }
+            }
+        }
+
+        // Switch theme function
+        function switchTheme(e) {
+            if (e.target.checked) {
+                document.body.classList.add('night-mode');
+                localStorage.setItem('theme', 'night');
+            } else {
+                document.body.classList.remove('night-mode');
+                localStorage.setItem('theme', 'day');
+            }
+        }
+
+        // Event listener for theme switch
+        toggleSwitch.addEventListener('change', switchTheme);
+
+        // Load theme preference when page loads
+        document.addEventListener('DOMContentLoaded', loadThemePreference);
+
         function openTab(evt, tabName) {
             // Hide all tab content
             const tabContent = document.getElementsByClassName("tab-content");
@@ -238,8 +245,11 @@
             return formatMap[fileExtension] || 'jpg';
         }
 
-        // Add image preview functionality
+        // Add file preview functionality
         document.addEventListener('DOMContentLoaded', function() {
+            // Initial function calls
+            loadThemePreference();
+
             const fileInputs = document.querySelectorAll('input[type="file"]');
 
             fileInputs.forEach(input => {
@@ -248,8 +258,13 @@
                     if (!file) return;
 
                     const fileUploadContainer = input.closest('.file-upload');
-                    const previewDiv = fileUploadContainer.querySelector('.image-preview') ||
-                                       fileUploadContainer.querySelector('.doc-preview');
+                    let previewDiv;
+
+                    if (input.id === 'image') {
+                        previewDiv = fileUploadContainer.querySelector('.image-preview');
+                    } else if (input.id === 'doc_file') {
+                        previewDiv = fileUploadContainer.querySelector('.doc-preview');
+                    }
 
                     if (!previewDiv) return;
 
@@ -332,12 +347,12 @@
                             <a href="${data.download_url}" class="download-btn" download>Download Converted Image</a>
                         `;
 
-                        // Check if there's a preview URL available
-                        if (data.preview_url) {
-                            const safePreviewUrl = data.preview_url;
+                        // Fix: Check if there's a download URL available instead of preview_url
+                        if (data.download_url) {
+                            const imageUrl = data.download_url;
                             resultContentDiv.innerHTML += `
                                 <div class="preview-image">
-                                    <img src="${safePreviewUrl}" alt="Converted image preview">
+                                    <img src="${imageUrl}" alt="Converted image preview">
                                 </div>
                             `;
                         }
@@ -393,11 +408,12 @@
                                 </div>
                             `;
                         } else if (conversion === 'text_to_html') {
-                            const safeHtmlPreview = data.html_preview || '';
+                            // Fix: Use safe content or placeholder if html_preview is not available
+                            const safeHtml = data.text || data.content || 'HTML preview not available';
                             resultContentDiv.innerHTML = `
                                 <div class="html-preview">
                                     <h4>HTML Preview:</h4>
-                                    <iframe srcdoc="${safeHtmlPreview}" style="width: 100%; height: 300px; border: 1px solid #ddd;"></iframe>
+                                    <iframe srcdoc="${safeHtml}" style="width: 100%; height: 300px; border: 1px solid #ddd;"></iframe>
                                     <a href="${data.download_url}" class="download-btn" download>Download HTML File</a>
                                 </div>
                             `;
