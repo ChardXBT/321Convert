@@ -72,7 +72,6 @@ A web-based file conversion tool that allows users to convert between different 
 
 - Batch file conversion
 - Cloud storage integration (Google Drive, Dropbox, etc.)
-- Dark mode UI option
 - Fix Excel glitching when converting to PDF and CSV
 
 
