@@ -1,23 +1,19 @@
-# import os
-import os  # Uncomment this as it's needed for file operations
-# import shutil
+import os
 from flask import Flask, render_template, request, send_file, jsonify, url_for
-# import io
 from pathlib import Path
 import time
 import threading
 import atexit
 
 # Import needed for converter registration
-from core.converter_factory import ConverterFactory  # Uncomment this line - it's crucial
-# Import conversions to register all converters (side effect import)
+from core.converter_factory import ConverterFactory
+# Import conversions to register all converters
 from conversions import *  # noqa: F401
 
 app = Flask(__name__)
 
 UPLOAD_FOLDER = 'uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-# Set file expiration time (in seconds)
 FILE_EXPIRATION = 3600  # 1 hour
 
 # Ensure uploads folder exists
@@ -25,17 +21,6 @@ Path(UPLOAD_FOLDER).mkdir(exist_ok=True)
 
 # Dictionary to track uploaded files and their timestamp
 file_tracker = {}
-
-# Mapping for format names and their internal PIL names
-FORMAT_MAPPING = {
-    'jpg': 'JPEG',
-    'jpeg': 'JPEG',
-    'png': 'PNG',
-    'webp': 'WEBP',
-    'gif': 'GIF',
-    'bmp': 'BMP',
-    'tiff': 'TIFF'
-}
 
 # Define MIME types for each format
 MIME_TYPES = {
@@ -52,7 +37,7 @@ MIME_TYPES = {
     'csv': 'text/csv',
     'html': 'text/html',
     'txt': 'text/plain',
-    'zip': 'application/zip'  # Added zip MIME type
+    'zip': 'application/zip'
 }
 
 
@@ -60,22 +45,15 @@ def cleanup_files():
     """Clean up expired files in the uploads folder"""
     while True:
         current_time = time.time()
-        expired_files = []
 
-        # Find expired files
+        # Find and remove expired files
         for filepath, timestamp in list(file_tracker.items()):
-            if current_time - timestamp > FILE_EXPIRATION:
-                expired_files.append(filepath)
-
-        # Remove expired files
-        for filepath in expired_files:
-            try:
-                if os.path.exists(filepath):
+            if current_time - timestamp > FILE_EXPIRATION and os.path.exists(filepath):
+                try:
                     os.remove(filepath)
-                file_tracker.pop(filepath, None)
-                print(f"Removed expired file: {filepath}")
-            except Exception as e:
-                print(f"Error removing file {filepath}: {e}")
+                    file_tracker.pop(filepath, None)
+                except Exception as e:
+                    print(f"Error removing file {filepath}: {e}")
 
         # Sleep for 5 minutes before checking again
         time.sleep(300)
@@ -93,7 +71,6 @@ def cleanup_all_files():
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             if os.path.isfile(file_path):
                 os.remove(file_path)
-        print("All files cleaned up on application shutdown")
     except Exception as e:
         print(f"Error during shutdown cleanup: {e}")
 
@@ -103,11 +80,10 @@ def index():
     return render_template('index.html')
 
 
-# Create routes to serve the converted files
 @app.route('/downloads/<filename>')
 def download_file(filename):
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    # Reset file timer on download - user is still active
+    # Reset file timer on download
     if filepath in file_tracker:
         file_tracker[filepath] = time.time()
 
@@ -121,11 +97,10 @@ def download_file(filename):
 @app.route('/previews/<filename>')
 def preview_file(filename):
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    # Reset file timer on preview - user is still active
+    # Reset file timer on preview
     if filepath in file_tracker:
         file_tracker[filepath] = time.time()
 
-    # Get the correct MIME type for the file
     extension = filename.split('.')[-1].lower()
     mimetype = MIME_TYPES.get(extension, 'application/octet-stream')
 
@@ -134,338 +109,255 @@ def preview_file(filename):
 
 @app.route('/convert', methods=['POST'])
 def convert_image_route():
-    if 'image' not in request.files:
-        return jsonify({"success": False, "error": "No file part"}), 400
+    if 'image' not in request.files or request.files['image'].filename == '':
+        return jsonify({"success": False, "error": "No file provided"}), 400
 
     file = request.files['image']
-    if file.filename == '':
-        return jsonify({"success": False, "error": "No selected file"}), 400
+    filename = f"original_{os.path.basename(file.filename)}"
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file.save(filepath)
+    track_file(filepath)
 
-    if file:
-        # Generate a unique filename to avoid collisions
-        filename = f"original_{os.path.basename(file.filename)}"
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
+    try:
+        input_format = request.form['input_format'].lower()
+        output_format = request.form['output_format'].lower()
+        quality = int(request.form.get('quality', 80))
 
-        # Track the new file
-        track_file(filepath)
+        # Map formats to PIL format names
+        FORMAT_MAPPING = {
+            'jpg': 'JPEG', 'jpeg': 'JPEG', 'png': 'PNG',
+            'webp': 'WEBP', 'gif': 'GIF', 'bmp': 'BMP', 'tiff': 'TIFF'
+        }
+        output_pil_format = FORMAT_MAPPING.get(output_format)
 
-        try:
-            input_format = request.form['input_format'].lower()
-            output_format = request.form['output_format'].lower()
+        if not output_pil_format:
+            return jsonify({"success": False, "error": f"Unsupported output format: {output_format}"}), 400
 
-            # Get the PIL format names
-            output_pil_format = FORMAT_MAPPING.get(output_format)
+        # Convert image
+        if input_format == 'gif' and output_format != 'gif':
+            from conversions.image_converter import convert_from_gif
+            converted_filepath = convert_from_gif(filepath, output_pil_format, quality=quality)
+        else:
+            from conversions.image_converter import convert_image
+            converted_filepath = convert_image(filepath, output_pil_format, quality=quality)
 
-            if not output_pil_format:
-                return jsonify({"success": False, "error": f"Unsupported output format: {output_format}"}), 400
+        track_file(converted_filepath)
+        converted_filename = os.path.basename(converted_filepath)
 
-            # Determine the correct conversion function based on input format
-            if input_format == 'gif' and output_format != 'gif':
-                from conversions.image_converter import convert_from_gif
-                converted_filepath = convert_from_gif(
-                    filepath,
-                    output_pil_format,
-                    quality=int(request.form.get('quality', 80))
-                )
-            else:
-                from conversions.image_converter import convert_image
-                converted_filepath = convert_image(
-                    filepath,
-                    output_pil_format,
-                    quality=int(request.form.get('quality', 80))
-                )
+        return jsonify({
+            "success": True,
+            "download_url": url_for('download_file', filename=converted_filename),
+            "preview_url": url_for('preview_file', filename=converted_filename)
+        })
 
-            # Track the converted file
-            track_file(converted_filepath)
-
-            # Generate unique filename for converted file
-            converted_filename = os.path.basename(converted_filepath)
-
-            # Create URLs for download and preview
-            download_url = url_for('download_file', filename=converted_filename)
-            preview_url = url_for('preview_file', filename=converted_filename)
-
-            return jsonify({
-                "success": True,
-                "download_url": download_url,
-                "preview_url": preview_url
-            })
-
-        except Exception as e:
-            return jsonify({"success": False, "error": str(e)}), 500
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route('/pdf/convert', methods=['POST'])
 def convert_pdf_route():
-    if 'file' not in request.files:
-        return jsonify({"success": False, "error": "No file part"}), 400
+    if 'file' not in request.files or request.files['file'].filename == '':
+        return jsonify({"success": False, "error": "No file provided"}), 400
 
     file = request.files['file']
-    if file.filename == '':
-        return jsonify({"success": False, "error": "No selected file"}), 400
+    filename = f"original_{os.path.basename(file.filename)}"
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file.save(filepath)
+    track_file(filepath)
 
-    if file:
-        # Generate a unique filename to avoid collisions
-        filename = f"original_{os.path.basename(file.filename)}"
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
+    try:
+        conversion_type = request.form['conversion_type']
 
-        # Track the new file
-        track_file(filepath)
+        # Set up parameters based on conversion type
+        params = {}
+        if conversion_type == 'pdf_to_images':
+            params['dpi'] = int(request.form.get('dpi', 300))
+            params['format'] = request.form.get('format', 'PNG')
+        elif conversion_type == 'compress_pdf':
+            params['quality'] = request.form.get('quality', 'medium')
+        elif conversion_type == 'rotate_pdf_pages':
+            params['rotation'] = int(request.form.get('rotation', 90))
+            pages = request.form.get('pages', '')
+            if pages:
+                params['pages'] = [int(p) for p in pages.split(',')]
+        elif conversion_type in ('encrypt_pdf', 'decrypt_pdf'):
+            params['password'] = request.form.get('password', '')
+            if conversion_type == 'encrypt_pdf' and request.form.get('owner_password'):
+                params['owner_password'] = request.form.get('owner_password')
 
-        try:
-            conversion_type = request.form['conversion_type']
+        # Set output path
+        output_file = os.path.join(app.config['UPLOAD_FOLDER'], f"converted_{os.path.basename(filepath)}")
+        params['output_path'] = output_file
 
-            # Get additional parameters
-            params = {}
-            if conversion_type == 'pdf_to_images':
-                params['dpi'] = int(request.form.get('dpi', 300))
-                params['format'] = request.form.get('format', 'PNG')
-            elif conversion_type == 'compress_pdf':
-                params['quality'] = request.form.get('quality', 'medium')
-            elif conversion_type == 'rotate_pdf_pages':
-                params['rotation'] = int(request.form.get('rotation', 90))
-                pages = request.form.get('pages', '')
-                if pages:
-                    params['pages'] = [int(p) for p in pages.split(',')]
-            elif conversion_type in ('encrypt_pdf', 'decrypt_pdf'):
-                params['password'] = request.form.get('password', '')
-                if conversion_type == 'encrypt_pdf':
-                    owner_password = request.form.get('owner_password', '')
-                    if owner_password:
-                        params['owner_password'] = owner_password
+        # Convert the file
+        result = ConverterFactory.convert(conversion_type, filepath, **params)
 
-            # Set output path
-            output_file = os.path.join(app.config['UPLOAD_FOLDER'], f"converted_{os.path.basename(filepath)}")
-            params['output_path'] = output_file
+        # Handle text extraction
+        if conversion_type == 'extract_text_from_pdf':
+            if isinstance(result, str):
+                text_file = os.path.join(app.config['UPLOAD_FOLDER'], "extracted_text.txt")
+                with open(text_file, 'w', encoding='utf-8') as f:
+                    f.write(result)
+                track_file(text_file)
+                return jsonify({
+                    "success": True,
+                    "text": result,
+                    "download_url": url_for('download_file', filename=os.path.basename(text_file))
+                })
 
-            # Perform conversion
-            result = ConverterFactory.convert(conversion_type, filepath, **params)
+        # Handle PDF to images
+        elif conversion_type == 'pdf_to_images' and isinstance(result, list):
+            for img_path in result:
+                track_file(img_path)
 
-            # Handle different return types
-            if conversion_type == 'extract_text_from_pdf':
-                # For text extraction, return the text content and a download link for a text file
-                if isinstance(result, str):
-                    # Save the text to a file
-                    text_file = os.path.join(app.config['UPLOAD_FOLDER'], "extracted_text.txt")
-                    with open(text_file, 'w', encoding='utf-8') as f:
-                        f.write(result)
+            # Create zip for bulk download
+            import zipfile
+            zip_path = os.path.join(app.config['UPLOAD_FOLDER'], "converted_images.zip")
+            with zipfile.ZipFile(zip_path, 'w') as zipf:
+                for file_path in result:
+                    zipf.write(file_path, os.path.basename(file_path))
+            track_file(zip_path)
 
-                    # Track the text file
-                    track_file(text_file)
+            # Create image URLs for preview
+            images = [{"url": url_for('preview_file', filename=os.path.basename(img_path))} for img_path in result]
 
-                    download_url = url_for('download_file', filename=os.path.basename(text_file))
-                    return jsonify({
-                        "success": True,
-                        "text": result,
-                        "download_url": download_url
-                    })
-            elif conversion_type == 'pdf_to_images':
-                # For PDF to images, return URLs for each image
-                if isinstance(result, list):
-                    # Track each image file
-                    for img_path in result:
-                        track_file(img_path)
+            return jsonify({
+                "success": True,
+                "images": images,
+                "format": params['format'],
+                "download_all_url": url_for('download_file', filename=os.path.basename(zip_path))
+            })
 
-                    # Create a zip file containing all results for bulk download
-                    import zipfile
-                    zip_path = os.path.join(app.config['UPLOAD_FOLDER'], "converted_images.zip")
-                    with zipfile.ZipFile(zip_path, 'w') as zipf:
-                        for file_path in result:
-                            zipf.write(file_path, os.path.basename(file_path))
+        # Handle single file result
+        elif isinstance(result, str) and os.path.isfile(result):
+            track_file(result)
+            return jsonify({
+                "success": True,
+                "download_url": url_for('download_file', filename=os.path.basename(result))
+            })
 
-                    # Track the zip file
-                    track_file(zip_path)
+        # Handle multiple file results
+        elif isinstance(result, list) and all(os.path.isfile(f) for f in result):
+            for file_path in result:
+                track_file(file_path)
 
-                    # Create image URLs
-                    images = []
-                    for img_path in result:
-                        img_filename = os.path.basename(img_path)
-                        images.append({
-                            "url": url_for('preview_file', filename=img_filename)
-                        })
+            # Create zip for bulk download
+            import zipfile
+            zip_path = os.path.join(app.config['UPLOAD_FOLDER'], "converted_files.zip")
+            with zipfile.ZipFile(zip_path, 'w') as zipf:
+                for file_path in result:
+                    zipf.write(file_path, os.path.basename(file_path))
+            track_file(zip_path)
 
-                    download_all_url = url_for('download_file', filename=os.path.basename(zip_path))
-                    return jsonify({
-                        "success": True,
-                        "images": images,
-                        "format": params['format'],
-                        "download_all_url": download_all_url
-                    })
-            else:
-                # For other operations that result in a single file
-                if isinstance(result, str) and os.path.isfile(result):
-                    # Track the result file
-                    track_file(result)
+            return jsonify({
+                "success": True,
+                "download_url": url_for('download_file', filename=os.path.basename(zip_path))
+            })
 
-                    download_url = url_for('download_file', filename=os.path.basename(result))
-                    return jsonify({
-                        "success": True,
-                        "download_url": download_url
-                    })
-                elif isinstance(result, list) and all(os.path.isfile(f) for f in result):
-                    # Track each file in the result
-                    for file_path in result:
-                        track_file(file_path)
+        return jsonify({"success": False, "error": "Unexpected result format"}), 500
 
-                    # Create a zip file containing all results
-                    import zipfile
-                    zip_path = os.path.join(app.config['UPLOAD_FOLDER'], "converted_files.zip")
-                    with zipfile.ZipFile(zip_path, 'w') as zipf:
-                        for file_path in result:
-                            zipf.write(file_path, os.path.basename(file_path))
-
-                    # Track the zip file
-                    track_file(zip_path)
-
-                    download_url = url_for('download_file', filename=os.path.basename(zip_path))
-                    return jsonify({
-                        "success": True,
-                        "download_url": download_url
-                    })
-
-            # If we get here, something unexpected happened
-            return jsonify({"success": False, "error": "Unexpected result format"}), 500
-
-        except Exception as e:
-            return jsonify({"success": False, "error": str(e)}), 500
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route('/document/convert', methods=['POST'])
 def convert_document_route():
-    if 'file' not in request.files:
-        return jsonify({"success": False, "error": "No file part"}), 400
+    if 'file' not in request.files or request.files['file'].filename == '':
+        return jsonify({"success": False, "error": "No file provided"}), 400
 
     file = request.files['file']
-    if file.filename == '':
-        return jsonify({"success": False, "error": "No selected file"}), 400
+    filename = f"original_{os.path.basename(file.filename)}"
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file.save(filepath)
+    track_file(filepath)
 
-    if file:
-        # Generate a unique filename to avoid collisions
-        filename = f"original_{os.path.basename(file.filename)}"
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
+    try:
+        conversion_type = request.form['conversion_type']
 
-        # Track the new file
-        track_file(filepath)
+        # Get additional parameters
+        params = {}
+        if conversion_type in ('excel_to_pdf', 'create_csv_from_excel') and request.form.get('sheet_name'):
+            params['sheet_name'] = request.form.get('sheet_name')
+        elif conversion_type == 'text_to_html':
+            params['title'] = request.form.get('title', 'Converted Document')
 
-        try:
-            conversion_type = request.form['conversion_type']
-            print(f"Starting {conversion_type} conversion for {filepath}")
+        # Set output path with proper extension
+        base_name = os.path.splitext(os.path.basename(filepath))[0]
+        output_extensions = {
+            'docx_to_pdf': 'pdf',
+            'html_to_pdf': 'pdf',
+            'excel_to_pdf': 'pdf',
+            'pdf_to_docx': 'docx',
+            'create_csv_from_excel': 'csv',
+            'text_to_html': 'html',
+            'image_to_text': 'txt'
+        }
+        ext = output_extensions.get(conversion_type, 'txt')
+        output_file = os.path.join(app.config['UPLOAD_FOLDER'], f"{base_name}_converted.{ext}")
+        params['output_path'] = output_file
 
-            # Get additional parameters
-            params = {}
-            if conversion_type in ('excel_to_pdf', 'create_csv_from_excel'):
-                sheet_name = request.form.get('sheet_name', '')
-                if sheet_name:
-                    params['sheet_name'] = sheet_name
-            elif conversion_type == 'text_to_html':
-                params['title'] = request.form.get('title', 'Converted Document')
+        # Perform conversion
+        result = ConverterFactory.convert(conversion_type, filepath, **params)
 
-            # Set output path
-            base_name = os.path.splitext(os.path.basename(filepath))[0]
+        # Track the output file
+        if os.path.exists(output_file):
+            track_file(output_file)
+        elif isinstance(result, str) and os.path.isfile(result):
+            output_file = result
+            track_file(output_file)
 
-            # Determine output extension based on conversion type
-            output_extensions = {
-                'docx_to_pdf': 'pdf',
-                'html_to_pdf': 'pdf',
-                'excel_to_pdf': 'pdf',
-                'pdf_to_docx': 'docx',
-                'create_csv_from_excel': 'csv',
-                'text_to_html': 'html',
-                'image_to_text': 'txt'
-            }
-
-            ext = output_extensions.get(conversion_type, 'txt')
-            output_file = os.path.join(app.config['UPLOAD_FOLDER'], f"{base_name}_converted.{ext}")
-            params['output_path'] = output_file
-            print(f"Output will be saved to: {output_file}")
-
-            # Perform conversion - add debugging statements
-            try:
-                print(
-                    f"Calling ConverterFactory.convert with type: {conversion_type}, file: {filepath}, params: {params}")
-                result = ConverterFactory.convert(conversion_type, filepath, **params)
-                print(f"Conversion result: {result}")
-            except Exception as conv_error:
-                print(f"Conversion error: {str(conv_error)}")
-                raise
-
-            # Track the output file if it exists
-            if os.path.exists(output_file):
+        # Handle image to text
+        if conversion_type == 'image_to_text':
+            if isinstance(result, str):
+                with open(output_file, 'w', encoding='utf-8') as f:
+                    f.write(result)
                 track_file(output_file)
-                print(f"Output file exists at {output_file}")
-            else:
-                print(f"Warning: Output file not found at {output_file}")
-                # If result is a file path but different from our expected output_file
-                if isinstance(result, str) and os.path.isfile(result):
-                    output_file = result
-                    track_file(output_file)
-                    print(f"Using result as output file instead: {output_file}")
 
-            # Handle different return types based on conversion type
-            if conversion_type == 'image_to_text':
-                # For OCR, return the extracted text and a download link
-                text_file = output_file
-                if isinstance(result, str):
-                    # If the result is text, save it to a file
-                    with open(text_file, 'w', encoding='utf-8') as f:
-                        f.write(result)
+            download_url = url_for('download_file', filename=os.path.basename(output_file))
+            return jsonify({
+                "success": True,
+                "text": result if isinstance(result, str) else "Text extraction succeeded",
+                "download_url": download_url
+            })
 
-                    # Track the text file
-                    track_file(text_file)
+        # Handle text to HTML
+        elif conversion_type == 'text_to_html':
+            download_url = url_for('download_file', filename=os.path.basename(output_file))
 
-                download_url = url_for('download_file', filename=os.path.basename(text_file))
-                return jsonify({
-                    "success": True,
-                    "text": result if isinstance(result, str) else "Text extraction succeeded",
-                    "download_url": download_url
-                })
-            elif conversion_type == 'text_to_html':
-                # For HTML conversion, return the HTML preview and download link
+            with open(output_file, 'r', encoding='utf-8') as f:
+                html_content = f.read()
+
+            import html
+            safe_html = html.escape(html_content)
+
+            return jsonify({
+                "success": True,
+                "html_preview": safe_html,
+                "download_url": download_url
+            })
+
+        # Handle other conversions
+        else:
+            if os.path.isfile(output_file):
                 download_url = url_for('download_file', filename=os.path.basename(output_file))
-
-                # Read the HTML content for preview
-                with open(output_file, 'r', encoding='utf-8') as f:
-                    html_content = f.read()
-
-                # Escape the HTML content for safe embedding in JSON
-                import html
-                safe_html = html.escape(html_content)
-
                 return jsonify({
                     "success": True,
-                    "html_preview": safe_html,
+                    "download_url": download_url
+                })
+            elif isinstance(result, str) and os.path.isfile(result):
+                download_url = url_for('download_file', filename=os.path.basename(result))
+                return jsonify({
+                    "success": True,
                     "download_url": download_url
                 })
             else:
-                # For all other conversions, return a download link to the output file
-                if os.path.isfile(output_file):
-                    download_url = url_for('download_file', filename=os.path.basename(output_file))
-                    return jsonify({
-                        "success": True,
-                        "download_url": download_url
-                    })
-                else:
-                    # Check if result is a file path that we can use
-                    if isinstance(result, str) and os.path.isfile(result):
-                        download_url = url_for('download_file', filename=os.path.basename(result))
-                        return jsonify({
-                            "success": True,
-                            "download_url": download_url
-                        })
-                    else:
-                        return jsonify({
-                            "success": False,
-                            "error": "Conversion failed: Output file not created"
-                        }), 500
+                return jsonify({
+                    "success": False,
+                    "error": "Conversion failed: Output file not created"
+                }), 500
 
-        except Exception as e:
-            print(f"Exception in convert_document_route: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return jsonify({"success": False, "error": str(e)}), 500
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route('/available-converters', methods=['GET'])

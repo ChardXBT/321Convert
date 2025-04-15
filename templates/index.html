@@ -6,27 +6,23 @@
     <title>Document Converter</title>
     <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-    <!-- Fix: Use CDN URL for Font Awesome instead of locally stored library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/js/all.min.js"></script>
 </head>
 <body>
     <div class="container">
         <h1>Document Converter</h1>
 
-        <!-- Day/Night Toggle Switch -->
         <div class="theme-switch-wrapper">
             <span>☀️</span>
             <label class="theme-switch" for="checkbox">
                 <input type="checkbox" id="checkbox" />
-                <div class="slider round"></div>
+                <div class="slider"></div>
             </label>
             <span>🌙</span>
         </div>
 
-        <!-- Notification area for displaying messages -->
         <div id="notification" class="notification"></div>
 
-        <!-- Fix: Use proper button structure in tab navigation -->
         <div class="tab">
             <button class="tab-links active" onclick="openTab(event, 'imageTab')">Image Conversion</button>
             <button class="tab-links" onclick="openTab(event, 'docTab')">Document Conversion</button>
@@ -116,13 +112,11 @@
                     <option value="image_to_text">Image to Text (OCR)</option>
                 </select>
 
-                <!-- Excel Options -->
                 <div id="excelOptions" class="hidden doc-options">
                     <label for="sheet_name">Sheet Name (optional):</label>
                     <input type="text" id="sheet_name" name="sheet_name" placeholder="Leave empty for first sheet">
                 </div>
 
-                <!-- HTML Options -->
                 <div id="htmlOptions" class="hidden doc-options">
                     <label for="title">Document Title:</label>
                     <input type="text" id="title" name="title" value="Converted Document">
@@ -142,7 +136,6 @@
         // Theme toggle functionality
         const toggleSwitch = document.querySelector('#checkbox');
 
-        // Check for saved theme preference or use preferred color scheme
         function loadThemePreference() {
             const savedTheme = localStorage.getItem('theme');
 
@@ -152,16 +145,12 @@
             } else if (savedTheme === 'day') {
                 toggleSwitch.checked = false;
                 document.body.classList.remove('night-mode');
-            } else {
-                // Check if user prefers dark mode
-                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-                    toggleSwitch.checked = true;
-                    document.body.classList.add('night-mode');
-                }
+            } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                toggleSwitch.checked = true;
+                document.body.classList.add('night-mode');
             }
         }
 
-        // Switch theme function
         function switchTheme(e) {
             if (e.target.checked) {
                 document.body.classList.add('night-mode');
@@ -172,38 +161,29 @@
             }
         }
 
-        // Event listener for theme switch
         toggleSwitch.addEventListener('change', switchTheme);
 
-        // Load theme preference when page loads
-        document.addEventListener('DOMContentLoaded', loadThemePreference);
-
         function openTab(evt, tabName) {
-            // Hide all tab content
             const tabContent = document.getElementsByClassName("tab-content");
             for (let i = 0; i < tabContent.length; i++) {
                 tabContent[i].style.display = "none";
             }
 
-            // Remove active class from all tab buttons
             const tabLinks = document.getElementsByClassName("tab-links");
             for (let i = 0; i < tabLinks.length; i++) {
                 tabLinks[i].className = tabLinks[i].className.replace(" active", "");
             }
 
-            // Show the selected tab and add active class to the button
             document.getElementById(tabName).style.display = "block";
             evt.currentTarget.className += " active";
         }
 
         function showDocOptions() {
-            // Hide all document option divs
             const options = document.getElementsByClassName("doc-options");
             for (let i = 0; i < options.length; i++) {
                 options[i].classList.add("hidden");
             }
 
-            // Show the selected option div
             const conversion = document.getElementById("doc_conversion").value;
             if (conversion === "excel_to_pdf" || conversion === "create_csv_from_excel") {
                 document.getElementById("excelOptions").classList.remove("hidden");
@@ -218,36 +198,24 @@
             notification.className = 'notification ' + type;
             notification.style.display = 'block';
 
-            // Auto hide after 5 seconds
             setTimeout(() => {
                 notification.style.display = 'none';
             }, 5000);
         }
 
         function detectImageFormat(file) {
-            // Get the file extension from the file name
             const fileName = file.name.toLowerCase();
             const fileExtension = fileName.substring(fileName.lastIndexOf('.') + 1);
 
-            // Map file extensions to format values in the dropdown
             const formatMap = {
-                'jpg': 'jpg',
-                'jpeg': 'jpg',
-                'png': 'png',
-                'webp': 'webp',
-                'gif': 'gif',
-                'bmp': 'bmp',
-                'tif': 'tiff',
-                'tiff': 'tiff'
+                'jpg': 'jpg', 'jpeg': 'jpg', 'png': 'png', 'webp': 'webp',
+                'gif': 'gif', 'bmp': 'bmp', 'tif': 'tiff', 'tiff': 'tiff'
             };
 
-            // Return the mapped format, defaulting to jpg if not found
             return formatMap[fileExtension] || 'jpg';
         }
 
-        // Add file preview functionality
         document.addEventListener('DOMContentLoaded', function() {
-            // Initial function calls
             loadThemePreference();
 
             const fileInputs = document.querySelectorAll('input[type="file"]');
@@ -268,12 +236,10 @@
 
                     if (!previewDiv) return;
 
-                    // Auto-detect and set image format if this is the image input
                     if (input.id === 'image' && file.type.match('image.*')) {
                         const inputFormatSelect = document.getElementById('input_format');
                         const detectedFormat = detectImageFormat(file);
 
-                        // Set the detected format in the dropdown
                         for (let i = 0; i < inputFormatSelect.options.length; i++) {
                             if (inputFormatSelect.options[i].value === detectedFormat) {
                                 inputFormatSelect.selectedIndex = i;
@@ -286,13 +252,12 @@
                         const reader = new FileReader();
                         reader.onload = function(e) {
                             previewDiv.innerHTML = `
-                                <img src="${e.target.result}" alt="Preview" style="max-width: 100%; max-height: 200px;">
+                                <img src="${e.target.result}" alt="Preview">
                                 <p>${file.name}</p>
                             `;
                         };
                         reader.readAsDataURL(file);
                     } else {
-                        // Display icon based on file type
                         let iconClass = 'file';
 
                         if (file.name.endsWith('.pdf')) {
@@ -320,7 +285,6 @@
                 const resultDiv = document.getElementById('imageResult');
                 const resultContentDiv = document.getElementById('imageResultContent');
 
-                // Show loading spinner
                 loadingDiv.style.display = 'block';
                 resultDiv.classList.add('hidden');
 
@@ -341,18 +305,15 @@
                         showNotification('Image converted successfully!', 'success');
                         resultDiv.classList.remove('hidden');
 
-                        // Create download link
                         resultContentDiv.innerHTML = `
                             <p>Your image has been successfully converted!</p>
                             <a href="${data.download_url}" class="download-btn" download>Download Converted Image</a>
                         `;
 
-                        // Fix: Check if there's a download URL available instead of preview_url
                         if (data.download_url) {
-                            const imageUrl = data.download_url;
                             resultContentDiv.innerHTML += `
                                 <div class="preview-image">
-                                    <img src="${imageUrl}" alt="Converted image preview">
+                                    <img src="${data.download_url}" alt="Converted image preview">
                                 </div>
                             `;
                         }
@@ -375,7 +336,6 @@
                 const resultDiv = document.getElementById('docResult');
                 const resultContentDiv = document.getElementById('docResultContent');
 
-                // Show loading spinner
                 loadingDiv.style.display = 'block';
                 resultDiv.classList.add('hidden');
 
@@ -396,7 +356,6 @@
                         showNotification('Document converted successfully!', 'success');
                         resultDiv.classList.remove('hidden');
 
-                        // Create result content based on conversion type
                         const conversion = document.getElementById('doc_conversion').value;
 
                         if (conversion === 'image_to_text') {
@@ -408,7 +367,6 @@
                                 </div>
                             `;
                         } else if (conversion === 'text_to_html') {
-                            // Fix: Use safe content or placeholder if html_preview is not available
                             const safeHtml = data.text || data.content || 'HTML preview not available';
                             resultContentDiv.innerHTML = `
                                 <div class="html-preview">
