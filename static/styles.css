@@ -1,501 +1,407 @@
 * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
 :root {
-    /* Day Mode Variables */
-    --day-bg-color: #f5f0e6;
-    --day-container-bg: #fff9f0;
-    --day-text-color: #4a4a4a;
-    --day-primary-color: #ec8b49;
-    --day-secondary-color: #a3c9a8;
-    --day-tab-bg: #fff5e6;
-    --day-hover-bg: #ffe6cc;
-    --day-file-upload-bg: #fff5e6;
-    --day-input-border: #a3c9a8;
-    --day-box-shadow: rgba(236, 139, 73, 0.2);
-    --day-success-bg: #d4edda;
-    --day-success-color: #155724;
-    --day-success-border: #c3e6cb;
-    --day-error-bg: #f8d7da;
-    --day-error-color: #721c24;
-    --day-error-border: #f5c6cb;
+  /* Day Mode */
+  --day-bg-color: #f5f0e6;
+  --day-container-bg: #fff9f0;
+  --day-text-color: #4a4a4a;
+  --day-primary-color: #ec8b49;
+  --day-secondary-color: #a3c9a8;
+  --day-tab-bg: #fff5e6;
+  --day-hover-bg: #ffe6cc;
+  --day-input-border: #a3c9a8;
+  --day-box-shadow: rgba(236, 139, 73, 0.2);
+  --day-success-bg: #d4edda;
+  --day-success-color: #155724;
+  --day-success-border: #c3e6cb;
+  --day-error-bg: #f8d7da;
+  --day-error-color: #721c24;
+  --day-error-border: #f5c6cb;
 
-    /* Night Mode Variables */
-    --night-bg-color: #1a1a1e;
-    --night-container-bg: #262220;
-    --night-text-color: #e1e1e6;
-    --night-primary-color: #e67e22; /* Orange primary color */
-    --night-secondary-color: #d35400; /* Darker orange secondary */
-    --night-tab-bg: #2c2520;
-    --night-hover-bg: #3d3326;
-    --night-file-upload-bg: #2c2520;
-    --night-input-border: #d35400;
-    --night-box-shadow: rgba(230, 126, 34, 0.3);
-    --night-success-bg: #1e382d;
-    --night-success-color: #9be3b7;
-    --night-success-border: #2c5e3f;
-    --night-error-bg: #3e1f23;
-    --night-error-color: #f5c2c7;
-    --night-error-border: #6b2830;
+  /* Night Mode */
+  --night-bg-color: #1a1a1e;
+  --night-container-bg: #262220;
+  --night-text-color: #e1e1e6;
+  --night-primary-color: #e67e22;
+  --night-secondary-color: #d35400;
+  --night-tab-bg: #2c2520;
+  --night-hover-bg: #3d3326;
+  --night-input-border: #d35400;
+  --night-box-shadow: rgba(230, 126, 34, 0.3);
+  --night-success-bg: #1e382d;
+  --night-success-color: #9be3b7;
+  --night-success-border: #2c5e3f;
+  --night-error-bg: #3e1f23;
+  --night-error-color: #f5c2c7;
+  --night-error-border: #6b2830;
 
-
-    /* Default to Day Mode */
-    --bg-color: var(--day-bg-color);
-    --container-bg: var(--day-container-bg);
-    --text-color: var(--day-text-color);
-    --primary-color: var(--day-primary-color);
-    --secondary-color: var(--day-secondary-color);
-    --tab-bg: var(--day-tab-bg);
-    --hover-bg: var(--day-hover-bg);
-    --file-upload-bg: var(--day-file-upload-bg);
-    --input-border: var(--day-input-border);
-    --box-shadow: var(--day-box-shadow);
-    --success-bg: var(--day-success-bg);
-    --success-color: var(--day-success-color);
-    --success-border: var(--day-success-border);
-    --error-bg: var(--day-error-bg);
-    --error-color: var(--day-error-color);
-    --error-border: var(--day-error-border);
+  /* Default to Day Mode */
+  --bg-color: var(--day-bg-color);
+  --container-bg: var(--day-container-bg);
+  --text-color: var(--day-text-color);
+  --primary-color: var(--day-primary-color);
+  --secondary-color: var(--day-secondary-color);
+  --tab-bg: var(--day-tab-bg);
+  --hover-bg: var(--day-hover-bg);
+  --file-upload-bg: var(--day-file-upload-bg);
+  --input-border: var(--day-input-border);
+  --box-shadow: var(--day-box-shadow);
+  --success-bg: var(--day-success-bg);
+  --success-color: var(--day-success-color);
+  --success-border: var(--day-success-border);
+  --error-bg: var(--day-error-bg);
+  --error-color: var(--day-error-color);
+  --error-border: var(--day-error-border);
 }
 
 body.night-mode {
-    --bg-color: var(--night-bg-color);
-    --container-bg: var(--night-container-bg);
-    --text-color: var(--night-text-color);
-    --primary-color: var(--night-primary-color);
-    --secondary-color: var(--night-secondary-color);
-    --tab-bg: var(--night-tab-bg);
-    --hover-bg: var(--night-hover-bg);
-    --file-upload-bg: var(--night-file-upload-bg);
-    --input-border: var(--night-input-border);
-    --box-shadow: var(--night-box-shadow);
-    --success-bg: var(--night-success-bg);
-    --success-color: var(--night-success-color);
-    --success-border: var(--night-success-border);
-    --error-bg: var(--night-error-bg);
-    --error-color: var(--night-error-color);
-    --error-border: var(--night-error-border);
-}
-
-@keyframes subtle-shake {
-    0%, 100% { transform: translateX(0); }
-    10%, 30%, 50%, 70%, 90% { transform: translateX(-0.1875rem); }
-    20%, 40%, 60%, 80% { transform: translateX(0.1875rem); }
-}
-
-@keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.05); }
-    100% { transform: scale(1); }
+  --bg-color: var(--night-bg-color);
+  --container-bg: var(--night-container-bg);
+  --text-color: var(--night-text-color);
+  --primary-color: var(--night-primary-color);
+  --secondary-color: var(--night-secondary-color);
+  --tab-bg: var(--night-tab-bg);
+  --hover-bg: var(--night-hover-bg);
+  --file-upload-bg: var(--night-file-upload-bg);
+  --input-border: var(--night-input-border);
+  --box-shadow: var(--night-box-shadow);
+  --success-bg: var(--night-success-bg);
+  --success-color: var(--night-success-color);
+  --success-border: var(--night-success-border);
+  --error-bg: var(--night-error-bg);
+  --error-color: var(--night-error-color);
+  --error-border: var(--night-error-border);
 }
 
 body {
-    font-family: 'Quicksand', sans-serif;
-    background-color: var(--bg-color);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-    line-height: 1.6;
-    color: var(--text-color);
-    transition: background-color 0.4s ease, color 0.4s ease;
+  font-family: 'Quicksand', sans-serif;
+  background-color: var(--bg-color);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  color: var(--text-color);
+  line-height: 1.6;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .container {
-    background-color: var(--container-bg);
-    border-radius: 0.75rem;
-    box-shadow: 0 0.625rem 1.5625rem var(--box-shadow);
-    width: 100%;
-    max-width: 31.25rem;
-    padding: 1.875rem;
-    text-align: center;
-    transition: transform 0.3s ease, background-color 0.4s ease, box-shadow 0.4s ease;
-}
-
-.container:hover {
-    transform: translateY(-0.3125rem);
+  background-color: var(--container-bg);
+  border-radius: 0.75rem;
+  box-shadow: 0 0.5rem 1.5rem var(--box-shadow);
+  width: 100%;
+  max-width: 31rem;
+  padding: 1.5rem;
+  text-align: center;
+  transition: transform 0.3s ease, background-color 0.3s ease;
 }
 
 h1 {
-    color: var(--primary-color);
-    margin-bottom: 1.25rem;
-    font-weight: 600;
-    transition: color 0.4s ease;
+  color: var(--primary-color);
+  margin-bottom: 1rem;
+  font-weight: 600;
 }
 
 h2 {
-    color: var(--primary-color);
-    margin-bottom: 1rem;
-    font-weight: 500;
-    transition: color 0.4s ease;
+  color: var(--primary-color);
+  margin-bottom: 1rem;
+  font-weight: 500;
 }
 
 .tab {
-    overflow: hidden;
-    border: 1px solid var(--primary-color);
-    background-color: var(--tab-bg);
-    border-radius: 0.625rem;
-    margin-bottom: 1.25rem;
-    display: flex;
-    justify-content: space-between;
-    transition: background-color 0.4s ease, border 0.4s ease;
+  display: flex;
+  justify-content: space-between;
+  border: 1px solid var(--primary-color);
+  background-color: var(--tab-bg);
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+  overflow: hidden;
 }
 
 .tab button {
-    background-color: inherit;
-    border: none;
-    outline: none;
-    cursor: pointer;
-    padding: 0.75rem 1rem;
-    transition: 0.3s;
-    font-size: 1rem;
-    font-family: 'Quicksand', sans-serif;
-    color: var(--text-color);
-    flex: 1;
-    text-align: center;
+  background-color: inherit;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  padding: 0.75rem 1rem;
+  transition: 0.3s;
+  font-size: 1rem;
+  color: var(--text-color);
+  flex: 1;
 }
 
 .tab button:hover {
-    background-color: var(--hover-bg);
+  background-color: var(--hover-bg);
 }
 
 .tab button.active {
-    background-color: var(--primary-color);
-    color: white;
+  background-color: var(--primary-color);
+  color: white;
 }
 
 .tab-content {
-    display: none;
-    padding: 1.25rem;
-    border: 1px solid var(--primary-color);
-    border-radius: 0.625rem;
-    background-color: var(--tab-bg);
-    animation: fadeEffect 0.5s;
-    transition: background-color 0.4s ease, border 0.4s ease;
+  display: none;
+  padding: 1rem;
+  border: 1px solid var(--primary-color);
+  border-radius: 0.5rem;
+  background-color: var(--tab-bg);
+  animation: fadeEffect 0.5s;
 }
 
 @keyframes fadeEffect {
-    from {opacity: 0;}
-    to {opacity: 1;}
+  from {opacity: 0;}
+  to {opacity: 1;}
 }
 
 .file-upload {
-    border: 0.125rem dashed var(--primary-color);
-    border-radius: 0.625rem;
-    padding: 2.5rem 1.25rem;
-    text-align: center;
-    transition: all 0.3s ease, background-color 0.4s ease, border 0.4s ease;
-    margin-bottom: 1.25rem;
-    background-color: var(--file-upload-bg);
+  border: 2px dashed var(--primary-color);
+  border-radius: 0.5rem;
+  padding: 2rem 1rem;
+  text-align: center;
+  margin-bottom: 1rem;
+  background-color: var(--tab-bg);
+  transition: background-color 0.3s;
 }
 
 .file-upload:hover {
-    background-color: var(--hover-bg);
-    border-color: var(--primary-color);
+  background-color: var(--hover-bg);
 }
 
 .file-upload input[type="file"] {
-    display: none;
+  display: none;
 }
 
 .file-upload-label {
-    display: inline-block;
-    padding: 0.625rem 1.25rem;
-    background-color: var(--primary-color);
-    color: white;
-    border-radius: 0.375rem;
-    cursor: pointer;
-    transition: all 0.3s ease, background-color 0.4s ease;
-    margin-bottom: 0.9375rem;
-    position: relative;
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  background-color: var(--primary-color);
+  color: white;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  margin-bottom: 0.5rem;
 }
 
 .file-upload-label:hover {
-    background-color: var(--secondary-color);
-    animation: subtle-shake 0.2s;
+  background-color: var(--secondary-color);
 }
 
 .image-preview, .doc-preview {
-    max-width: 100%;
-    max-height: 15.625rem;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
+  max-width: 100%;
+  max-height: 15rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .image-preview img, .doc-preview img {
-    max-width: 100%;
-    max-height: 12.5rem;
-    object-fit: contain;
-    border-radius: 0.5rem;
-    margin-top: 0.9375rem;
-    transition: transform 0.3s ease;
-    border: 0.125rem solid var(--secondary-color);
+  max-width: 100%;
+  max-height: 12rem;
+  object-fit: contain;
+  border-radius: 0.5rem;
+  margin-top: 0.5rem;
+  border: 2px solid var(--secondary-color);
 }
 
-.image-preview img:hover, .doc-preview img:hover {
-    transform: scale(1.05);
-}
-
-.image-preview p, .doc-preview p {
-    color: var(--primary-color);
-    font-style: italic;
-    transition: color 0.4s ease;
-}
-
-/* File icons for document preview */
 .file-icon {
-    font-size: 2.5rem;
-    margin: 10px 0;
-    color: var(--primary-color);
-}
-
-.file-icon.file-pdf:before {
-    content: "\f1c1";
-    font-family: "Font Awesome 5 Free", sans-serif;
-    font-weight: 400;
-}
-
-.file-icon.file-word:before {
-    content: "\f1c2";
-    font-family: "Font Awesome 5 Free", sans-serif;
-    font-weight: 400;
-}
-
-.file-icon.file-excel:before {
-    content: "\f1c3";
-    font-family: "Font Awesome 5 Free", sans-serif;
-    font-weight: 400;
-}
-
-.file-icon.file:before {
-    content: "\f15b";
-    font-family: "Font Awesome 5 Free", sans-serif;
-    font-weight: 400;
+  font-size: 2.5rem;
+  margin: 10px 0;
+  color: var(--primary-color);
 }
 
 select, input[type="number"], input[type="text"] {
-    width: 100%;
-    padding: 0.625rem;
-    margin: 0.625rem 0;
-    border-radius: 0.375rem;
-    border: 0.0625rem solid var(--input-border);
-    transition: all 0.3s ease, background-color 0.4s ease, border 0.4s ease, color 0.4s ease;
-    font-family: 'Quicksand', sans-serif;
-    background-color: var(--container-bg);
-    color: var(--text-color);
+  width: 100%;
+  padding: 0.5rem;
+  margin: 0.5rem 0;
+  border-radius: 0.25rem;
+  border: 1px solid var(--input-border);
+  background-color: var(--container-bg);
+  color: var(--text-color);
+  font-family: inherit;
 }
 
 select:focus, input[type="number"]:focus, input[type="text"]:focus {
-    outline: none;
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 0.1875rem var(--box-shadow);
+  outline: none;
+  border-color: var(--primary-color);
 }
 
 input[type="submit"] {
-    width: 100%;
-    padding: 0.625rem;
-    margin: 0.625rem 0;
-    background-color: var(--primary-color);
-    color: white;
-    border: none;
-    border-radius: 0.375rem;
-    cursor: pointer;
-    transition: all 0.3s ease, background-color 0.4s ease;
-    font-family: 'Quicksand', sans-serif;
-    font-weight: 600;
+  width: 100%;
+  padding: 0.5rem;
+  margin: 0.5rem 0;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  font-family: inherit;
+  font-weight: 600;
 }
 
 input[type="submit"]:hover {
-    background-color: var(--secondary-color);
-    animation: subtle-shake 0.3s;
+  background-color: var(--secondary-color);
 }
 
-.download-button, .download-btn {
-    display: inline-block;
-    padding: 0.625rem 1.25rem;
-    background-color: var(--primary-color);
-    color: white;
-    text-decoration: none;
-    border-radius: 0.375rem;
-    transition: all 0.3s ease, background-color 0.4s ease;
-    position: relative;
+.download-btn {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  background-color: var(--primary-color);
+  color: white;
+  text-decoration: none;
+  border-radius: 0.25rem;
+  transition: background-color 0.3s;
 }
 
-.download-button:hover, .download-btn:hover {
-    background-color: var(--secondary-color);
-    animation: subtle-shake 0.3s;
+.download-btn:hover {
+  background-color: var(--secondary-color);
 }
 
 .loading {
-    display: none;
-    text-align: center;
-    margin: 20px 0;
-    animation: pulse 1.5s infinite;
+  display: none;
+  text-align: center;
+  margin: 1rem 0;
 }
 
 .conversion-selects {
-    display: flex;
-    gap: 1.25rem;
-    margin-bottom: 1.25rem;
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
 }
 
 .input-format, .output-format {
-    flex: 1;
+  flex: 1;
 }
 
 label {
-    display: block;
-    margin-bottom: 0.625rem;
-    color: var(--primary-color);
-    font-weight: 600;
-    transition: color 0.4s ease;
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--primary-color);
+  font-weight: 600;
 }
 
 .hidden {
-    display: none;
+  display: none;
 }
 
-/* Day/Night Toggle Switch */
 .theme-switch-wrapper {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
 }
 
 .theme-switch {
-    display: inline-block;
-    height: 1.5rem;
-    position: relative;
-    width: 3rem;
+  display: inline-block;
+  height: 1.5rem;
+  position: relative;
+  width: 3rem;
 }
 
 .theme-switch input {
-    display: none;
+  display: none;
 }
 
 .slider {
-    background-color: #ccc;
-    bottom: 0;
-    cursor: pointer;
-    left: 0;
-    position: absolute;
-    right: 0;
-    top: 0;
-    transition: .4s;
-    border-radius: 1.5rem;
+  background-color: #ccc;
+  bottom: 0;
+  cursor: pointer;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+  transition: .4s;
+  border-radius: 1.5rem;
 }
 
 .slider:before {
-    background-color: white;
-    bottom: 0.25rem;
-    content: "";
-    height: 1rem;
-    left: 0.25rem;
-    position: absolute;
-    transition: .4s;
-    width: 1rem;
-    border-radius: 50%;
+  background-color: white;
+  bottom: 0.25rem;
+  content: "";
+  height: 1rem;
+  left: 0.25rem;
+  position: absolute;
+  transition: .4s;
+  width: 1rem;
+  border-radius: 50%;
 }
 
 input:checked + .slider {
-    background-color: var(--night-primary-color);
+  background-color: var(--night-primary-color);
 }
 
 input:checked + .slider:before {
-    transform: translateX(1.5rem);
+  transform: translateX(1.5rem);
 }
 
-/* Notification Styling */
 .notification {
-    padding: 10px 15px;
-    margin-bottom: 20px;
-    border-radius: 4px;
-    display: none;
-    transition: background-color 0.4s ease, color 0.4s ease, border 0.4s ease;
+  padding: 10px 15px;
+  margin-bottom: 15px;
+  border-radius: 4px;
+  display: none;
 }
 
 .notification.success {
-    background-color: var(--success-bg);
-    color: var(--success-color);
-    border: 1px solid var(--success-border);
+  background-color: var(--success-bg);
+  color: var(--success-color);
+  border: 1px solid var(--success-border);
 }
 
 .notification.error {
-    background-color: var(--error-bg);
-    color: var(--error-color);
-    border: 1px solid var(--error-border);
+  background-color: var(--error-bg);
+  color: var(--error-color);
+  border: 1px solid var(--error-border);
 }
 
 .loading-spinner {
-    border: 4px solid var(--tab-bg);
-    border-top: 4px solid var(--primary-color);
-    border-radius: 50%;
-    width: 30px;
-    height: 30px;
-    animation: spin 2s linear infinite;
-    margin: 0 auto;
-    transition: border 0.4s ease;
+  border: 4px solid var(--tab-bg);
+  border-top: 4px solid var(--primary-color);
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  animation: spin 2s linear infinite;
+  margin: 0 auto;
 }
 
 @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
-/* Result containers */
 .result-container {
-    padding: 1rem;
-    margin-top: 1.5rem;
-    border: 1px solid var(--primary-color);
-    border-radius: 0.625rem;
-    background-color: var(--tab-bg);
-    transition: background-color 0.4s ease, border 0.4s ease;
+  padding: 1rem;
+  margin-top: 1rem;
+  border: 1px solid var(--primary-color);
+  border-radius: 0.5rem;
+  background-color: var(--tab-bg);
 }
 
-.result-container h3 {
-    color: var(--primary-color);
-    margin-bottom: 1rem;
-    transition: color 0.4s ease;
-}
-
-/* OCR result styling */
 .ocr-result pre {
-    background-color: var(--container-bg);
-    padding: 1rem;
-    border-radius: 0.5rem;
-    text-align: left;
-    white-space: pre-wrap;
-    max-height: 300px;
-    overflow-y: auto;
-    margin-bottom: 1rem;
-    font-family: monospace, sans-serif;
-    color: var(--text-color);
+  background-color: var(--container-bg);
+  padding: 1rem;
+  border-radius: 0.5rem;
+  text-align: left;
+  white-space: pre-wrap;
+  max-height: 300px;
+  overflow-y: auto;
+  margin-bottom: 1rem;
+  font-family: monospace;
+  color: var(--text-color);
 }
 
-/* Responsive adjustments */
 @media (max-width: 600px) {
-    .container {
-        max-width: 100%;
-        padding: 1rem;
-    }
+  .container {
+    max-width: 100%;
+    padding: 1rem;
+  }
 
-    .conversion-selects {
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-
-    .tab button {
-        padding: 0.5rem;
-        font-size: 0.875rem;
-    }
-
-    .theme-switch-wrapper {
-        margin-bottom: 0.75rem;
-    }
+  .conversion-selects {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
 }
