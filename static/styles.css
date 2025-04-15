@@ -21,6 +21,7 @@
   --day-error-bg: #f8d7da;
   --day-error-color: #721c24;
   --day-error-border: #f5c6cb;
+  --day-file-upload-bg: #fff9f0;
 
   /* Night Mode */
   --night-bg-color: #1a1a1e;
@@ -38,6 +39,7 @@
   --night-error-bg: #3e1f23;
   --night-error-color: #f5c2c7;
   --night-error-border: #6b2830;
+  --night-file-upload-bg: #2c2520;
 
   /* Default to Day Mode */
   --bg-color: var(--day-bg-color);
@@ -404,4 +406,21 @@ input:checked + .slider:before {
     flex-direction: column;
     gap: 0.5rem;
   }
+}
+/* Add constraints to converted/result images */
+.result-container img {
+  max-width: 100%;
+  height: auto;
+  max-height: 300px;
+  object-fit: contain;
+  border-radius: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+/* Ensure image container properly contains images */
+.result-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: hidden; /* Prevent content from breaking out */
 }
