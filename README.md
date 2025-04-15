@@ -72,7 +72,6 @@ A web-based file conversion tool that allows users to convert between different 
 
 - Batch file conversion
 - Fix Excel glitching when converting to PDF and CSV
-- Fix Image Converter converted image being big and out of size (Front End)
 
 
 ## Contributions
