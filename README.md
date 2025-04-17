@@ -71,7 +71,7 @@ A web-based file conversion tool that allows users to convert between different 
 ## Future Improvements
 
 - Batch file conversion
-- Fix Excel glitching when converting to PDF and CSV
+- Audio and Video File conversion: Extract audio from video files (.mp4, .avi, .mov, etc.) + Convert to various audio formats (MP3, WAV, OGG, etc.)
 
 
 ## Contributions
