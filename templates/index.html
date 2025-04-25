@@ -38,7 +38,7 @@
             </div>
 
             <form id="imageConversionForm" action="/convert" method="post" enctype="multipart/form-data">
-                <div class="file-upload">
+                <div id="imageDropZone" class="file-upload drop-zone">
                     <input type="file" id="image" name="image" accept="image/*" required>
                     <label for="image" class="file-upload-label">Select Image</label>
                     <p>Or drag and drop files here</p>
@@ -93,7 +93,7 @@
             </div>
 
             <form id="docConversionForm" action="/document/convert" method="post" enctype="multipart/form-data">
-                <div class="file-upload">
+                <div id="docDropZone" class="file-upload drop-zone">
                     <input type="file" id="doc_file" name="file" accept=".docx,.xlsx,.html,.txt,.pdf" required>
                     <label for="doc_file" class="file-upload-label">Select Document</label>
                     <p>Or drag and drop files here</p>
@@ -215,66 +215,126 @@
             return formatMap[fileExtension] || 'jpg';
         }
 
+        function handleFiles(files, inputElement) {
+            if (!files.length) return;
+
+            const file = files[0];
+            const fileUploadContainer = inputElement.closest('.file-upload');
+            let previewDiv;
+
+            if (inputElement.id === 'image') {
+                previewDiv = fileUploadContainer.querySelector('.image-preview');
+            } else if (inputElement.id === 'doc_file') {
+                previewDiv = fileUploadContainer.querySelector('.doc-preview');
+            }
+
+            if (!previewDiv) return;
+
+            if (inputElement.id === 'image' && file.type.match('image.*')) {
+                const inputFormatSelect = document.getElementById('input_format');
+                const detectedFormat = detectImageFormat(file);
+
+                for (let i = 0; i < inputFormatSelect.options.length; i++) {
+                    if (inputFormatSelect.options[i].value === detectedFormat) {
+                        inputFormatSelect.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+
+            if (file.type.match('image.*')) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    previewDiv.innerHTML = `
+                        <img src="${e.target.result}" alt="Preview">
+                        <p>${file.name}</p>
+                    `;
+                };
+                reader.readAsDataURL(file);
+            } else {
+                let iconClass = 'file';
+
+                if (file.name.endsWith('.pdf')) {
+                    iconClass = 'file-pdf';
+                } else if (file.name.endsWith('.docx') || file.name.endsWith('.doc')) {
+                    iconClass = 'file-word';
+                } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+                    iconClass = 'file-excel';
+                }
+
+                previewDiv.innerHTML = `
+                    <div class="file-icon ${iconClass}"></div>
+                    <p>${file.name}</p>
+                `;
+            }
+
+            // Set the file to the input element
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+            inputElement.files = dataTransfer.files;
+        }
+
+        // Set up drag and drop functionality
+        function setupDropZone(dropZoneId, inputId) {
+            const dropZone = document.getElementById(dropZoneId);
+            const inputElement = document.getElementById(inputId);
+
+            if (!dropZone || !inputElement) return;
+
+            // Prevent default drag behaviors
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, preventDefaults, false);
+                document.body.addEventListener(eventName, preventDefaults, false);
+            });
+
+            // Highlight drop zone when item is dragged over it
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, highlight, false);
+            });
+
+            // Remove highlight when item is dragged out or dropped
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, unhighlight, false);
+            });
+
+            // Handle dropped files
+            dropZone.addEventListener('drop', handleDrop, false);
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            function highlight(e) {
+                dropZone.classList.add('dragover');
+            }
+
+            function unhighlight(e) {
+                dropZone.classList.remove('dragover');
+            }
+
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+
+                handleFiles(files, inputElement);
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             loadThemePreference();
 
+            // Set up file input change handlers
             const fileInputs = document.querySelectorAll('input[type="file"]');
-
             fileInputs.forEach(input => {
                 input.addEventListener('change', function(e) {
-                    const file = e.target.files[0];
-                    if (!file) return;
-
-                    const fileUploadContainer = input.closest('.file-upload');
-                    let previewDiv;
-
-                    if (input.id === 'image') {
-                        previewDiv = fileUploadContainer.querySelector('.image-preview');
-                    } else if (input.id === 'doc_file') {
-                        previewDiv = fileUploadContainer.querySelector('.doc-preview');
-                    }
-
-                    if (!previewDiv) return;
-
-                    if (input.id === 'image' && file.type.match('image.*')) {
-                        const inputFormatSelect = document.getElementById('input_format');
-                        const detectedFormat = detectImageFormat(file);
-
-                        for (let i = 0; i < inputFormatSelect.options.length; i++) {
-                            if (inputFormatSelect.options[i].value === detectedFormat) {
-                                inputFormatSelect.selectedIndex = i;
-                                break;
-                            }
-                        }
-                    }
-
-                    if (file.type.match('image.*')) {
-                        const reader = new FileReader();
-                        reader.onload = function(e) {
-                            previewDiv.innerHTML = `
-                                <img src="${e.target.result}" alt="Preview">
-                                <p>${file.name}</p>
-                            `;
-                        };
-                        reader.readAsDataURL(file);
-                    } else {
-                        let iconClass = 'file';
-
-                        if (file.name.endsWith('.pdf')) {
-                            iconClass = 'file-pdf';
-                        } else if (file.name.endsWith('.docx') || file.name.endsWith('.doc')) {
-                            iconClass = 'file-word';
-                        } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-                            iconClass = 'file-excel';
-                        }
-
-                        previewDiv.innerHTML = `
-                            <div class="file-icon ${iconClass}"></div>
-                            <p>${file.name}</p>
-                        `;
-                    }
+                    handleFiles(e.target.files, input);
                 });
             });
+
+            // Set up drop zones
+            setupDropZone('imageDropZone', 'image');
+            setupDropZone('docDropZone', 'doc_file');
 
             // Handle Image Conversion Form submission
             document.getElementById('imageConversionForm').addEventListener('submit', function(e) {

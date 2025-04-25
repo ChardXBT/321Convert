@@ -22,6 +22,7 @@
   --day-error-color: #721c24;
   --day-error-border: #f5c6cb;
   --day-file-upload-bg: #fff9f0;
+  --day-dragover-color: #ff7d1a; /* New orange color for drag over */
 
   /* Night Mode */
   --night-bg-color: #1a1a1e;
@@ -40,6 +41,7 @@
   --night-error-color: #f5c2c7;
   --night-error-border: #6b2830;
   --night-file-upload-bg: #2c2520;
+  --night-dragover-color: #ff9040; /* New orange color for drag over in night mode */
 
   /* Default to Day Mode */
   --bg-color: var(--day-bg-color);
@@ -58,6 +60,7 @@
   --error-bg: var(--day-error-bg);
   --error-color: var(--day-error-color);
   --error-border: var(--day-error-border);
+  --dragover-color: var(--day-dragover-color);
 }
 
 body.night-mode {
@@ -77,6 +80,7 @@ body.night-mode {
   --error-bg: var(--night-error-bg);
   --error-color: var(--night-error-color);
   --error-border: var(--night-error-border);
+  --dragover-color: var(--night-dragover-color);
 }
 
 body {
@@ -166,11 +170,20 @@ h2 {
   text-align: center;
   margin-bottom: 1rem;
   background-color: var(--tab-bg);
-  transition: background-color 0.3s;
+  transition: all 0.3s ease;
+  position: relative;
 }
 
 .file-upload:hover {
   background-color: var(--hover-bg);
+}
+
+.file-upload.dragover {
+  background-color: var(--hover-bg);
+  border-color: var(--dragover-color);
+  border-style: solid;
+  transform: scale(1.02);
+  box-shadow: 0 0 10px rgba(255, 125, 26, 0.3);
 }
 
 .file-upload input[type="file"] {
@@ -190,6 +203,10 @@ h2 {
 
 .file-upload-label:hover {
   background-color: var(--secondary-color);
+}
+
+.drop-zone {
+  cursor: pointer;
 }
 
 .image-preview, .doc-preview {
@@ -423,4 +440,15 @@ input:checked + .slider:before {
   flex-direction: column;
   align-items: center;
   overflow: hidden; /* Prevent content from breaking out */
+}
+
+/* Animation for drag and drop highlight */
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 125, 26, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(255, 125, 26, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 125, 26, 0); }
+}
+
+.file-upload.dragover {
+  animation: pulse 1.5s infinite;
 }
