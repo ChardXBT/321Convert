@@ -8,18 +8,11 @@ A web-based file conversion tool that allows users to convert between different 
 
 ## Features
 
-- Convert images between multiple formats (PNG, JPG, WEBP, etc.)
-- Convert documents between various formats:
-  - DOCX to PDF
-  - HTML to PDF
-  - Excel to PDF
-  - PDF to DOCX
-  - Excel to CSV
-  - Text to HTML
-  - Image to Text (OCR)
+- Convert images between multiple formats
+- Convert documents between various formats
 - Simple and intuitive web interface
 - Fast and efficient conversion process
-- No need for installation—accessible from the web
+- No need for installation accessible from the web
 
 ## Installation
 
