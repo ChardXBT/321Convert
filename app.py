@@ -1,9 +1,9 @@
-import os
 from flask import Flask, render_template, request, send_file, jsonify, url_for
-from pathlib import Path
 import time
 import threading
 import atexit
+import zipfile
+import os
 
 # Import needed for converter registration
 from core.converter_factory import ConverterFactory
@@ -12,12 +12,14 @@ from conversions import *  # noqa: F401
 
 app = Flask(__name__)
 
+# Configuration
 UPLOAD_FOLDER = 'uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 FILE_EXPIRATION = 3600  # 1 hour
 
 # Ensure uploads folder exists
-Path(UPLOAD_FOLDER).mkdir(exist_ok=True)
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
 # Dictionary to track uploaded files and their timestamp
 file_tracker = {}
@@ -38,6 +40,22 @@ MIME_TYPES = {
     'html': 'text/html',
     'txt': 'text/plain',
     'zip': 'application/zip'
+}
+
+# File and conversion settings
+FORMAT_MAPPING = {
+    'jpg': 'JPEG', 'jpeg': 'JPEG', 'png': 'PNG',
+    'webp': 'WEBP', 'gif': 'GIF', 'bmp': 'BMP', 'tiff': 'TIFF'
+}
+
+OUTPUT_EXTENSIONS = {
+    'docx_to_pdf': 'pdf',
+    'html_to_pdf': 'pdf',
+    'excel_to_pdf': 'pdf',
+    'pdf_to_docx': 'docx',
+    'create_csv_from_excel': 'csv',
+    'text_to_html': 'html',
+    'image_to_text': 'txt'
 }
 
 
@@ -75,6 +93,29 @@ def cleanup_all_files():
         print(f"Error during shutdown cleanup: {e}")
 
 
+def handle_file_upload(file_key='file'):
+    """Handle file upload and return filepath"""
+    if file_key not in request.files or request.files[file_key].filename == '':
+        return None
+
+    file = request.files[file_key]
+    filename = "original_" + os.path.basename(file.filename)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file.save(filepath)
+    track_file(filepath)
+    return filepath
+
+
+def create_zip_archive(files, zip_name):
+    """Create a zip archive from a list of files"""
+    zip_path = os.path.join(app.config['UPLOAD_FOLDER'], zip_name)
+    with zipfile.ZipFile(zip_path, 'w') as zipf:
+        for file_path in files:
+            zipf.write(file_path, os.path.basename(file_path))
+    track_file(zip_path)
+    return zip_path
+
+
 @app.route('/', methods=['GET'])
 def index():
     return render_template('index.html')
@@ -109,27 +150,16 @@ def preview_file(filename):
 
 @app.route('/convert', methods=['POST'])
 def convert_image_route():
-    if 'image' not in request.files or request.files['image'].filename == '':
+    filepath = handle_file_upload('image')
+    if not filepath:
         return jsonify({"success": False, "error": "No file provided"}), 400
-
-    file = request.files['image']
-    filename = f"original_{os.path.basename(file.filename)}"
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    file.save(filepath)
-    track_file(filepath)
 
     try:
         input_format = request.form['input_format'].lower()
         output_format = request.form['output_format'].lower()
         quality = int(request.form.get('quality', 80))
 
-        # Map formats to PIL format names
-        FORMAT_MAPPING = {
-            'jpg': 'JPEG', 'jpeg': 'JPEG', 'png': 'PNG',
-            'webp': 'WEBP', 'gif': 'GIF', 'bmp': 'BMP', 'tiff': 'TIFF'
-        }
         output_pil_format = FORMAT_MAPPING.get(output_format)
-
         if not output_pil_format:
             return jsonify({"success": False, "error": f"Unsupported output format: {output_format}"}), 400
 
@@ -156,14 +186,9 @@ def convert_image_route():
 
 @app.route('/pdf/convert', methods=['POST'])
 def convert_pdf_route():
-    if 'file' not in request.files or request.files['file'].filename == '':
+    filepath = handle_file_upload()
+    if not filepath:
         return jsonify({"success": False, "error": "No file provided"}), 400
-
-    file = request.files['file']
-    filename = f"original_{os.path.basename(file.filename)}"
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    file.save(filepath)
-    track_file(filepath)
 
     try:
         conversion_type = request.form['conversion_type']
@@ -186,37 +211,30 @@ def convert_pdf_route():
                 params['owner_password'] = request.form.get('owner_password')
 
         # Set output path
-        output_file = os.path.join(app.config['UPLOAD_FOLDER'], f"converted_{os.path.basename(filepath)}")
+        output_file = os.path.join(app.config['UPLOAD_FOLDER'], "converted_" + os.path.basename(filepath))
         params['output_path'] = output_file
 
         # Convert the file
         result = ConverterFactory.convert(conversion_type, filepath, **params)
 
         # Handle text extraction
-        if conversion_type == 'extract_text_from_pdf':
-            if isinstance(result, str):
-                text_file = os.path.join(app.config['UPLOAD_FOLDER'], "extracted_text.txt")
-                with open(text_file, 'w', encoding='utf-8') as f:
-                    f.write(result)
-                track_file(text_file)
-                return jsonify({
-                    "success": True,
-                    "text": result,
-                    "download_url": url_for('download_file', filename=os.path.basename(text_file))
-                })
+        if conversion_type == 'extract_text_from_pdf' and isinstance(result, str):
+            text_file = os.path.join(app.config['UPLOAD_FOLDER'], "extracted_text.txt")
+            with open(text_file, 'w', encoding='utf-8') as f:
+                f.write(result)
+            track_file(text_file)
+            return jsonify({
+                "success": True,
+                "text": result,
+                "download_url": url_for('download_file', filename=os.path.basename(text_file))
+            })
 
         # Handle PDF to images
         elif conversion_type == 'pdf_to_images' and isinstance(result, list):
             for img_path in result:
                 track_file(img_path)
 
-            # Create zip for bulk download
-            import zipfile
-            zip_path = os.path.join(app.config['UPLOAD_FOLDER'], "converted_images.zip")
-            with zipfile.ZipFile(zip_path, 'w') as zipf:
-                for file_path in result:
-                    zipf.write(file_path, os.path.basename(file_path))
-            track_file(zip_path)
+            zip_path = create_zip_archive(result, "converted_images.zip")
 
             # Create image URLs for preview
             images = [{"url": url_for('preview_file', filename=os.path.basename(img_path))} for img_path in result]
@@ -241,13 +259,7 @@ def convert_pdf_route():
             for file_path in result:
                 track_file(file_path)
 
-            # Create zip for bulk download
-            import zipfile
-            zip_path = os.path.join(app.config['UPLOAD_FOLDER'], "converted_files.zip")
-            with zipfile.ZipFile(zip_path, 'w') as zipf:
-                for file_path in result:
-                    zipf.write(file_path, os.path.basename(file_path))
-            track_file(zip_path)
+            zip_path = create_zip_archive(result, "converted_files.zip")
 
             return jsonify({
                 "success": True,
@@ -262,14 +274,9 @@ def convert_pdf_route():
 
 @app.route('/document/convert', methods=['POST'])
 def convert_document_route():
-    if 'file' not in request.files or request.files['file'].filename == '':
+    filepath = handle_file_upload()
+    if not filepath:
         return jsonify({"success": False, "error": "No file provided"}), 400
-
-    file = request.files['file']
-    filename = f"original_{os.path.basename(file.filename)}"
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    file.save(filepath)
-    track_file(filepath)
 
     try:
         conversion_type = request.form['conversion_type']
@@ -283,17 +290,8 @@ def convert_document_route():
 
         # Set output path with proper extension
         base_name = os.path.splitext(os.path.basename(filepath))[0]
-        output_extensions = {
-            'docx_to_pdf': 'pdf',
-            'html_to_pdf': 'pdf',
-            'excel_to_pdf': 'pdf',
-            'pdf_to_docx': 'docx',
-            'create_csv_from_excel': 'csv',
-            'text_to_html': 'html',
-            'image_to_text': 'txt'
-        }
-        ext = output_extensions.get(conversion_type, 'txt')
-        output_file = os.path.join(app.config['UPLOAD_FOLDER'], f"{base_name}_converted.{ext}")
+        ext = OUTPUT_EXTENSIONS.get(conversion_type, 'txt')
+        output_file = os.path.join(app.config['UPLOAD_FOLDER'], base_name + "_converted." + ext)
         params['output_path'] = output_file
 
         # Perform conversion
@@ -313,10 +311,17 @@ def convert_document_route():
                     f.write(result)
                 track_file(output_file)
 
+                download_url = url_for('download_file', filename=os.path.basename(output_file))
+                return jsonify({
+                    "success": True,
+                    "text": result,
+                    "download_url": download_url
+                })
+
             download_url = url_for('download_file', filename=os.path.basename(output_file))
             return jsonify({
                 "success": True,
-                "text": result if isinstance(result, str) else "Text extraction succeeded",
+                "text": "Text extraction succeeded",
                 "download_url": download_url
             })
 
