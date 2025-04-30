@@ -6,7 +6,7 @@
     <title>Document Converter</title>
     <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/js/all.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/js/all.min.js" defer></script>
 </head>
 <body>
     <div class="container">
@@ -15,7 +15,7 @@
         <div class="theme-switch-wrapper">
             <span>☀️</span>
             <label class="theme-switch" for="checkbox">
-                <input type="checkbox" id="checkbox" />
+                <input type="checkbox" id="checkbox">
                 <div class="slider"></div>
             </label>
             <span>🌙</span>
@@ -24,8 +24,8 @@
         <div id="notification" class="notification"></div>
 
         <div class="tab">
-            <button class="tab-links active" onclick="openTab(event, 'imageTab')">Image Conversion</button>
-            <button class="tab-links" onclick="openTab(event, 'docTab')">Document Conversion</button>
+            <button class="tab-links active" data-tab="imageTab">Image Conversion</button>
+            <button class="tab-links" data-tab="docTab">Document Conversion</button>
         </div>
 
         <!-- Image Conversion Tab -->
@@ -101,7 +101,7 @@
                 </div>
 
                 <label for="doc_conversion">Conversion Type:</label>
-                <select id="doc_conversion" name="conversion_type" onchange="showDocOptions()" required>
+                <select id="doc_conversion" name="conversion_type" required>
                     <option value="">Select Conversion</option>
                     <option value="docx_to_pdf">DOCX to PDF</option>
                     <option value="html_to_pdf">HTML to PDF</option>
@@ -133,65 +133,76 @@
     </div>
 
     <script>
-        // Theme toggle functionality
-        const toggleSwitch = document.querySelector('#checkbox');
+        document.addEventListener('DOMContentLoaded', function() {
+            // Theme toggle functionality
+            const toggleSwitch = document.querySelector('#checkbox');
+            const body = document.body;
 
-        function loadThemePreference() {
+            // Load theme preference
             const savedTheme = localStorage.getItem('theme');
-
-            if (savedTheme === 'night') {
+            if (savedTheme === 'night' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
                 toggleSwitch.checked = true;
-                document.body.classList.add('night-mode');
-            } else if (savedTheme === 'day') {
-                toggleSwitch.checked = false;
-                document.body.classList.remove('night-mode');
-            } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-                toggleSwitch.checked = true;
-                document.body.classList.add('night-mode');
-            }
-        }
-
-        function switchTheme(e) {
-            if (e.target.checked) {
-                document.body.classList.add('night-mode');
-                localStorage.setItem('theme', 'night');
-            } else {
-                document.body.classList.remove('night-mode');
-                localStorage.setItem('theme', 'day');
-            }
-        }
-
-        toggleSwitch.addEventListener('change', switchTheme);
-
-        function openTab(evt, tabName) {
-            const tabContent = document.getElementsByClassName("tab-content");
-            for (let i = 0; i < tabContent.length; i++) {
-                tabContent[i].style.display = "none";
+                body.classList.add('night-mode');
             }
 
-            const tabLinks = document.getElementsByClassName("tab-links");
-            for (let i = 0; i < tabLinks.length; i++) {
-                tabLinks[i].className = tabLinks[i].className.replace(" active", "");
-            }
+            // Theme switch event
+            toggleSwitch.addEventListener('change', function(e) {
+                if (e.target.checked) {
+                    body.classList.add('night-mode');
+                    localStorage.setItem('theme', 'night');
+                } else {
+                    body.classList.remove('night-mode');
+                    localStorage.setItem('theme', 'day');
+                }
+            });
 
-            document.getElementById(tabName).style.display = "block";
-            evt.currentTarget.className += " active";
-        }
+            // Tab functionality
+            const tabLinks = document.querySelectorAll('.tab-links');
+            tabLinks.forEach(link => {
+                link.addEventListener('click', function() {
+                    const tabId = this.getAttribute('data-tab');
 
-        function showDocOptions() {
-            const options = document.getElementsByClassName("doc-options");
-            for (let i = 0; i < options.length; i++) {
-                options[i].classList.add("hidden");
-            }
+                    // Hide all tabs and remove active class
+                    document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');
+                    tabLinks.forEach(btn => btn.classList.remove('active'));
 
-            const conversion = document.getElementById("doc_conversion").value;
-            if (conversion === "excel_to_pdf" || conversion === "create_csv_from_excel") {
-                document.getElementById("excelOptions").classList.remove("hidden");
-            } else if (conversion === "text_to_html") {
-                document.getElementById("htmlOptions").classList.remove("hidden");
-            }
-        }
+                    // Show selected tab and add active class
+                    document.getElementById(tabId).style.display = 'block';
+                    this.classList.add('active');
+                });
+            });
 
+            // File input change handlers
+            const fileInputs = document.querySelectorAll('input[type="file"]');
+            fileInputs.forEach(input => {
+                input.addEventListener('change', function() {
+                    handleFiles(this.files, this);
+                });
+            });
+
+            // Doc conversion type change handler
+            document.getElementById('doc_conversion').addEventListener('change', function() {
+                const options = document.querySelectorAll('.doc-options');
+                options.forEach(option => option.classList.add('hidden'));
+
+                const conversion = this.value;
+                if (['excel_to_pdf', 'create_csv_from_excel'].includes(conversion)) {
+                    document.getElementById('excelOptions').classList.remove('hidden');
+                } else if (conversion === 'text_to_html') {
+                    document.getElementById('htmlOptions').classList.remove('hidden');
+                }
+            });
+
+            // Setup drop zones
+            setupDropZone('imageDropZone', 'image');
+            setupDropZone('docDropZone', 'doc_file');
+
+            // Form submission handlers
+            setupFormSubmission('imageConversionForm', 'imageLoading', 'imageResult', 'imageResultContent');
+            setupFormSubmission('docConversionForm', 'docLoading', 'docResult', 'docResultContent');
+        });
+
+        // Helper functions
         function showNotification(message, type) {
             const notification = document.getElementById('notification');
             notification.innerHTML = message;
@@ -220,28 +231,23 @@
 
             const file = files[0];
             const fileUploadContainer = inputElement.closest('.file-upload');
-            let previewDiv;
-
-            if (inputElement.id === 'image') {
-                previewDiv = fileUploadContainer.querySelector('.image-preview');
-            } else if (inputElement.id === 'doc_file') {
-                previewDiv = fileUploadContainer.querySelector('.doc-preview');
-            }
+            const previewDiv = fileUploadContainer.querySelector('.image-preview, .doc-preview');
 
             if (!previewDiv) return;
 
+            // Auto-detect image format
             if (inputElement.id === 'image' && file.type.match('image.*')) {
                 const inputFormatSelect = document.getElementById('input_format');
                 const detectedFormat = detectImageFormat(file);
 
-                for (let i = 0; i < inputFormatSelect.options.length; i++) {
-                    if (inputFormatSelect.options[i].value === detectedFormat) {
-                        inputFormatSelect.selectedIndex = i;
-                        break;
+                Array.from(inputFormatSelect.options).forEach((option, index) => {
+                    if (option.value === detectedFormat) {
+                        inputFormatSelect.selectedIndex = index;
                     }
-                }
+                });
             }
 
+            // Create preview
             if (file.type.match('image.*')) {
                 const reader = new FileReader();
                 reader.onload = function(e) {
@@ -267,88 +273,69 @@
                     <p>${file.name}</p>
                 `;
             }
-
-            // Set the file to the input element
-            const dataTransfer = new DataTransfer();
-            dataTransfer.items.add(file);
-            inputElement.files = dataTransfer.files;
         }
 
-        // Set up drag and drop functionality
         function setupDropZone(dropZoneId, inputId) {
             const dropZone = document.getElementById(dropZoneId);
             const inputElement = document.getElementById(inputId);
 
             if (!dropZone || !inputElement) return;
 
-            // Prevent default drag behaviors
-            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-                dropZone.addEventListener(eventName, preventDefaults, false);
-                document.body.addEventListener(eventName, preventDefaults, false);
-            });
-
-            // Highlight drop zone when item is dragged over it
-            ['dragenter', 'dragover'].forEach(eventName => {
-                dropZone.addEventListener(eventName, highlight, false);
-            });
-
-            // Remove highlight when item is dragged out or dropped
-            ['dragleave', 'drop'].forEach(eventName => {
-                dropZone.addEventListener(eventName, unhighlight, false);
-            });
-
-            // Handle dropped files
-            dropZone.addEventListener('drop', handleDrop, false);
-
+            // Event handler functions
             function preventDefaults(e) {
                 e.preventDefault();
                 e.stopPropagation();
             }
 
-            function highlight(e) {
+            function highlight() {
                 dropZone.classList.add('dragover');
             }
 
-            function unhighlight(e) {
+            function unhighlight() {
                 dropZone.classList.remove('dragover');
             }
 
             function handleDrop(e) {
-                const dt = e.dataTransfer;
-                const files = dt.files;
-
+                const files = e.dataTransfer.files;
                 handleFiles(files, inputElement);
+
+                // Set the file to the input element
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(files[0]);
+                inputElement.files = dataTransfer.files;
             }
+
+            // Set up event listeners
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, preventDefaults, false);
+            });
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, highlight, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, unhighlight, false);
+            });
+
+            dropZone.addEventListener('drop', handleDrop, false);
         }
 
-        document.addEventListener('DOMContentLoaded', function() {
-            loadThemePreference();
+        function setupFormSubmission(formId, loadingId, resultId, resultContentId) {
+            const form = document.getElementById(formId);
+            const loadingDiv = document.getElementById(loadingId);
+            const resultDiv = document.getElementById(resultId);
+            const resultContentDiv = document.getElementById(resultContentId);
 
-            // Set up file input change handlers
-            const fileInputs = document.querySelectorAll('input[type="file"]');
-            fileInputs.forEach(input => {
-                input.addEventListener('change', function(e) {
-                    handleFiles(e.target.files, input);
-                });
-            });
-
-            // Set up drop zones
-            setupDropZone('imageDropZone', 'image');
-            setupDropZone('docDropZone', 'doc_file');
-
-            // Handle Image Conversion Form submission
-            document.getElementById('imageConversionForm').addEventListener('submit', function(e) {
+            form.addEventListener('submit', function(e) {
                 e.preventDefault();
 
                 const formData = new FormData(this);
-                const loadingDiv = document.getElementById('imageLoading');
-                const resultDiv = document.getElementById('imageResult');
-                const resultContentDiv = document.getElementById('imageResultContent');
 
                 loadingDiv.style.display = 'block';
                 resultDiv.classList.add('hidden');
 
-                fetch('/convert', {
+                fetch(this.action, {
                     method: 'POST',
                     body: formData
                 })
@@ -362,83 +349,40 @@
                     loadingDiv.style.display = 'none';
 
                     if (data.success) {
-                        showNotification('Image converted successfully!', 'success');
+                        showNotification('Conversion successful!', 'success');
                         resultDiv.classList.remove('hidden');
 
-                        resultContentDiv.innerHTML = `
-                            <p>Your image has been successfully converted!</p>
-                            <a href="${data.download_url}" class="download-btn" download>Download Converted Image</a>
-                        `;
+                        if (formId === 'docConversionForm') {
+                            const conversion = document.getElementById('doc_conversion').value;
 
-                        if (data.download_url) {
-                            resultContentDiv.innerHTML += `
-                                <div class="preview-image">
-                                    <img src="${data.download_url}" alt="Converted image preview">
-                                </div>
-                            `;
-                        }
-                    } else {
-                        showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
-                    }
-                })
-                .catch(error => {
-                    loadingDiv.style.display = 'none';
-                    showNotification('Error: ' + error.message, 'error');
-                });
-            });
-
-            // Handle Document Conversion Form submission
-            document.getElementById('docConversionForm').addEventListener('submit', function(e) {
-                e.preventDefault();
-
-                const formData = new FormData(this);
-                const loadingDiv = document.getElementById('docLoading');
-                const resultDiv = document.getElementById('docResult');
-                const resultContentDiv = document.getElementById('docResultContent');
-
-                loadingDiv.style.display = 'block';
-                resultDiv.classList.add('hidden');
-
-                fetch('/document/convert', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    loadingDiv.style.display = 'none';
-
-                    if (data.success) {
-                        showNotification('Document converted successfully!', 'success');
-                        resultDiv.classList.remove('hidden');
-
-                        const conversion = document.getElementById('doc_conversion').value;
-
-                        if (conversion === 'image_to_text') {
-                            resultContentDiv.innerHTML = `
-                                <div class="ocr-result">
-                                    <h4>Extracted Text:</h4>
-                                    <pre>${data.text || ''}</pre>
-                                    <a href="${data.download_url}" class="download-btn" download>Download Text File</a>
-                                </div>
-                            `;
-                        } else if (conversion === 'text_to_html') {
-                            const safeHtml = data.text || data.content || 'HTML preview not available';
-                            resultContentDiv.innerHTML = `
-                                <div class="html-preview">
-                                    <h4>HTML Preview:</h4>
-                                    <iframe srcdoc="${safeHtml}" style="width: 100%; height: 300px; border: 1px solid #ddd;"></iframe>
-                                    <a href="${data.download_url}" class="download-btn" download>Download HTML File</a>
-                                </div>
-                            `;
+                            if (conversion === 'image_to_text') {
+                                resultContentDiv.innerHTML = `
+                                    <div class="ocr-result">
+                                        <h4>Extracted Text:</h4>
+                                        <pre>${data.text || ''}</pre>
+                                        <a href="${data.download_url}" class="download-btn" download>Download Text File</a>
+                                    </div>
+                                `;
+                            } else if (conversion === 'text_to_html') {
+                                const safeHtml = data.text || data.content || 'HTML preview not available';
+                                resultContentDiv.innerHTML = `
+                                    <div class="html-preview">
+                                        <h4>HTML Preview:</h4>
+                                        <iframe srcdoc="${safeHtml}" style="width: 100%; height: 300px; border: 1px solid #ddd;"></iframe>
+                                        <a href="${data.download_url}" class="download-btn" download>Download HTML File</a>
+                                    </div>
+                                `;
+                            } else {
+                                resultContentDiv.innerHTML = `
+                                    <p>Your document has been successfully converted!</p>
+                                    <a href="${data.download_url}" class="download-btn" download>Download Converted Document</a>
+                                `;
+                            }
                         } else {
                             resultContentDiv.innerHTML = `
-                                <p>Your document has been successfully converted!</p>
-                                <a href="${data.download_url}" class="download-btn" download>Download Converted Document</a>
+                                <p>Your image has been successfully converted!</p>
+                                <a href="${data.download_url}" class="download-btn" download>Download Converted Image</a>
+                                ${data.download_url ? `<div class="preview-image"><img src="${data.download_url}" alt="Converted image preview"></div>` : ''}
                             `;
                         }
                     } else {
@@ -450,7 +394,7 @@
                     showNotification('Error: ' + error.message, 'error');
                 });
             });
-        });
+        }
     </script>
 </body>
 </html>
