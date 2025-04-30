@@ -62,8 +62,7 @@ A web-based file conversion tool that allows users to convert between different 
 - **HTML/CSS** - Frontend design
 
 ## Future Improvements
-
-- Audio and Video File conversion: Extract audio from video files (.mp4, .avi, .mov, etc.) + Convert to various audio formats (MP3, WAV, OGG, etc.)
+- Currently none
 
 
 ## Contributions
@@ -79,7 +78,7 @@ Contributions are welcome! To contribute:
 For major changes, please open an issue first to discuss what you'd like to change.
 
 ## Current Direction
-- Devlopment is on hold (Working on other projects)
+- Idle
 
 ## License
 
