@@ -77,9 +77,6 @@ Contributions are welcome! To contribute:
 
 For major changes, please open an issue first to discuss what you'd like to change.
 
-## Current Direction
-- Idle
-
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
