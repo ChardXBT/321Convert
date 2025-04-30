@@ -53,13 +53,21 @@ A web-based file conversion tool that allows users to convert between different 
    Open your web browser and go to `http://127.0.0.1:5000/`
 
 ## Technologies Used
-
-- **Flask** - Web framework for Python
-- **Pillow** - Image processing library
-- **pdf2docx** - PDF to DOCX conversion
-- **pandas** - Excel and CSV processing
-- **Tesseract OCR** - Image to text extraction
-- **HTML/CSS** - Frontend design
+- **Flask**: Web framework for Python, used for handling requests and routing.
+- **Pillow**: Image processing library, used for image conversions and transformations.
+- **pdf2docx**: Library for converting PDFs to DOCX format.
+- **pandas**: Data analysis and manipulation library, especially for Excel and CSV file handling.
+- **Tesseract OCR**: Optical Character Recognition tool for extracting text from images.
+- **HTML/CSS**: For designing and structuring the frontend of the web application.
+- **Flask-CORS**: Handles Cross-Origin Resource Sharing (CORS) to allow secure communication between the frontend and backend.
+- **gunicorn**: WSGI HTTP server for deploying the Flask app in a production environment.
+- **python-docx**: Library for creating, modifying, and converting DOCX files.
+- **docx2pdf**: Converts DOCX files to PDFs.
+- **docxcompose**: Python library for merging and composing DOCX documents.
+- **pypdf**: For working with PDF files, including reading and extracting text.
+- **python-dotenv**: Loads environment variables from a `.env` file for configuration.
+- **openpyxl**: Library for reading and writing Excel (XLSX) files.
+- **xhtml2pdf**: Converts HTML to PDF.
 
 ## Future Improvements
 - Currently none
