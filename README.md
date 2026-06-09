@@ -4,6 +4,8 @@ A privacy-first Flask file converter deployed on Render.
 
 **Live demo:** [three21convert.onrender.com](https://three21convert.onrender.com)
 
+Maintained by [ChardXBT](https://github.com/ChardXBT).
+
 ## Privacy model
 
 - Files are processed inside a unique operating-system temporary directory.
