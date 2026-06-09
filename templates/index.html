@@ -5,34 +5,45 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Private, temporary image and document conversion.">
     <title>321Convert | Private file converter</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-    <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260609-2') }}">
+    <script src="{{ url_for('static', filename='app.js', v='20260609-2') }}" defer></script>
 </head>
 <body>
     <header class="site-header">
-        <a class="brand" href="/" aria-label="321Convert home"><span>321</span>Convert</a>
-        <button id="themeToggle" class="icon-button" type="button" aria-label="Switch color theme">Theme</button>
+        <a class="brand" href="/" aria-label="321Convert home">
+            <span class="brand-mark" aria-hidden="true">321</span>
+            <span>Convert</span>
+        </a>
+        <div class="header-actions">
+            <span class="privacy-status"><span aria-hidden="true"></span>Private processing</span>
+            <button id="themeToggle" class="theme-button" type="button" aria-label="Switch color theme">Appearance</button>
+        </div>
     </header>
 
     <main>
-        <section class="hero">
-            <div class="eyebrow">PRIVATE BY DESIGN</div>
-            <h1>Convert files.<br><em>Leave no trace.</em></h1>
-            <p>Your file is processed in a temporary workspace, returned directly to you, and deleted before the request finishes.</p>
-            <div class="trust-row" aria-label="Privacy features">
-                <span>No accounts</span><span>No public links</span><span>No permanent storage</span>
-            </div>
+        <section class="intro">
+            <p class="overline">Private file conversion</p>
+            <h1>A better way to convert files.</h1>
+            <p class="intro-copy">Fast, focused conversion for images and documents. Your files are processed temporarily and never stored.</p>
+            <dl class="privacy-details">
+                <div><dt>Storage</dt><dd>None</dd></div>
+                <div><dt>Public links</dt><dd>Never</dd></div>
+                <div><dt>File limit</dt><dd>{{ max_upload_mb }} MB</dd></div>
+            </dl>
         </section>
 
-        <section class="converter-card" aria-labelledby="converterTitle">
-            <div class="card-heading">
-                <div><span class="step">01</span><h2 id="converterTitle">Choose a converter</h2></div>
-                <p>Maximum file size: {{ max_upload_mb }} MB</p>
+        <section class="workspace" aria-labelledby="converterTitle">
+            <div class="workspace-header">
+                <div>
+                    <p class="section-label">Converter</p>
+                    <h2 id="converterTitle">Choose a file to get started</h2>
+                </div>
+                <p>Files are removed when processing completes.</p>
             </div>
 
             <div class="tabs" role="tablist" aria-label="Converter type">
-                <button class="tab active" type="button" role="tab" aria-selected="true" aria-controls="imagePanel" data-panel="imagePanel">Images</button>
-                <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="documentPanel" data-panel="documentPanel">Documents</button>
+                <button class="tab active" type="button" role="tab" aria-selected="true" aria-controls="imagePanel" data-panel="imagePanel">Image</button>
+                <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="documentPanel" data-panel="documentPanel">Document</button>
             </div>
 
             <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
@@ -41,10 +52,9 @@
                 <form action="/convert" method="post" enctype="multipart/form-data">
                     <label class="drop-zone" for="imageFile">
                         <input id="imageFile" name="image" type="file" accept=".jpg,.jpeg,.png,.webp,.gif,.bmp,.tif,.tiff" required>
-                        <span class="upload-mark">+</span>
-                        <strong>Drop an image here</strong>
-                        <small>or click to browse</small>
-                        <span class="file-name">JPG, PNG, WebP, GIF, BMP or TIFF</span>
+                        <span class="file-symbol" aria-hidden="true"></span>
+                        <strong>Drop an image here or select a file</strong>
+                        <span class="file-name">JPG, PNG, WebP, GIF, BMP and TIFF</span>
                     </label>
                     <div class="form-grid">
                         <label>Output format
@@ -58,7 +68,7 @@
                             <input name="quality" type="number" min="1" max="100" value="82" required>
                         </label>
                     </div>
-                    <button class="primary-button" type="submit">Convert image <span>→</span></button>
+                    <button class="primary-button" type="submit">Convert image</button>
                 </form>
             </section>
 
@@ -66,10 +76,9 @@
                 <form action="/document/convert" method="post" enctype="multipart/form-data">
                     <label class="drop-zone" for="documentFile">
                         <input id="documentFile" name="file" type="file" accept=".pdf,.xlsx,.html,.htm,.txt" required>
-                        <span class="upload-mark">+</span>
-                        <strong>Drop a document here</strong>
-                        <small>or click to browse</small>
-                        <span class="file-name">PDF, XLSX, HTML or TXT</span>
+                        <span class="file-symbol" aria-hidden="true"></span>
+                        <strong>Drop a document here or select a file</strong>
+                        <span class="file-name">PDF, XLSX, HTML and TXT</span>
                     </label>
                     <label>Conversion
                         <select id="documentConversion" name="conversion_type" required>
@@ -83,17 +92,24 @@
                     </label>
                     <div id="sheetOption" hidden><label>Sheet name (optional)<input name="sheet_name" type="text" maxlength="100"></label></div>
                     <div id="titleOption" hidden><label>Document title<input name="title" type="text" maxlength="120" value="Converted Document"></label></div>
-                    <button class="primary-button" type="submit">Convert document <span>→</span></button>
+                    <button class="primary-button" type="submit">Convert document</button>
                 </form>
             </section>
 
             <div id="result" class="result" hidden>
-                <div><span class="success-mark">✓</span><div><strong>Conversion complete</strong><p>Your download is ready in this browser.</p></div></div>
-                <a id="downloadLink" class="download-button" download>Download file</a>
+                <div class="result-copy"><span class="result-indicator" aria-hidden="true"></span><div><strong>Conversion complete</strong><p>Your file is ready to download.</p></div></div>
+                <a id="downloadLink" class="download-button" download>Download converted file</a>
                 <img id="imagePreview" alt="Converted image preview" hidden>
             </div>
         </section>
+
+        <section class="assurance" aria-label="Privacy information">
+            <div><span>01</span><h3>Temporary processing</h3><p>Each conversion runs in an isolated temporary workspace.</p></div>
+            <div><span>02</span><h3>Direct delivery</h3><p>The converted file is returned directly to your browser.</p></div>
+            <div><span>03</span><h3>Automatic removal</h3><p>Input and output files are removed after the request completes.</p></div>
+        </section>
     </main>
-    <footer><span>321Convert</span><span>Files are temporary. Privacy is permanent.</span></footer>
+
+    <footer><span>321Convert</span><span>Private by design.</span></footer>
 </body>
 </html>
