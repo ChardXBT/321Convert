@@ -18,6 +18,10 @@ Thumbs.db
 *.iws
 # Upload directory (optional)
 uploads/*
+uploads/
+.env
+.env.*
+!.env.example
 # Dependency directories
 *.egg-info/
 dist/

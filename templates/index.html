@@ -1,400 +1,99 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document Converter</title>
-    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600&display=swap" rel="stylesheet">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Private, temporary image and document conversion.">
+    <title>321Convert | Private file converter</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/js/all.min.js" defer></script>
+    <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 </head>
 <body>
-    <div class="container">
-        <h1>Document Converter</h1>
+    <header class="site-header">
+        <a class="brand" href="/" aria-label="321Convert home"><span>321</span>Convert</a>
+        <button id="themeToggle" class="icon-button" type="button" aria-label="Switch color theme">Theme</button>
+    </header>
 
-        <div class="theme-switch-wrapper">
-            <span>☀️</span>
-            <label class="theme-switch" for="checkbox">
-                <input type="checkbox" id="checkbox">
-                <div class="slider"></div>
-            </label>
-            <span>🌙</span>
-        </div>
+    <main>
+        <section class="hero">
+            <div class="eyebrow">PRIVATE BY DESIGN</div>
+            <h1>Convert files.<br><em>Leave no trace.</em></h1>
+            <p>Your file is processed in a temporary workspace, returned directly to you, and deleted before the request finishes.</p>
+            <div class="trust-row" aria-label="Privacy features">
+                <span>No accounts</span><span>No public links</span><span>No permanent storage</span>
+            </div>
+        </section>
 
-        <div id="notification" class="notification"></div>
-
-        <div class="tab">
-            <button class="tab-links active" data-tab="imageTab">Image Conversion</button>
-            <button class="tab-links" data-tab="docTab">Document Conversion</button>
-        </div>
-
-        <!-- Image Conversion Tab -->
-        <div id="imageTab" class="tab-content" style="display: block;">
-            <h2>Image Conversion</h2>
-
-            <div id="imageLoading" class="loading">
-                <div class="loading-spinner"></div>
-                <p>Processing your image...</p>
+        <section class="converter-card" aria-labelledby="converterTitle">
+            <div class="card-heading">
+                <div><span class="step">01</span><h2 id="converterTitle">Choose a converter</h2></div>
+                <p>Maximum file size: {{ max_upload_mb }} MB</p>
             </div>
 
-            <form id="imageConversionForm" action="/convert" method="post" enctype="multipart/form-data">
-                <div id="imageDropZone" class="file-upload drop-zone">
-                    <input type="file" id="image" name="image" accept="image/*" required>
-                    <label for="image" class="file-upload-label">Select Image</label>
-                    <p>Or drag and drop files here</p>
-                    <div class="image-preview"></div>
-                </div>
+            <div class="tabs" role="tablist" aria-label="Converter type">
+                <button class="tab active" type="button" role="tab" aria-selected="true" aria-controls="imagePanel" data-panel="imagePanel">Images</button>
+                <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="documentPanel" data-panel="documentPanel">Documents</button>
+            </div>
 
-                <div class="conversion-selects">
-                    <div class="input-format">
-                        <label for="input_format">Input Format:</label>
-                        <select id="input_format" name="input_format" required>
-                            <option value="jpg">JPG/JPEG</option>
-                            <option value="png">PNG</option>
-                            <option value="webp">WebP</option>
-                            <option value="gif">GIF</option>
-                            <option value="bmp">BMP</option>
-                            <option value="tiff">TIFF</option>
-                        </select>
+            <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+            <section id="imagePanel" class="panel active" role="tabpanel">
+                <form action="/convert" method="post" enctype="multipart/form-data">
+                    <label class="drop-zone" for="imageFile">
+                        <input id="imageFile" name="image" type="file" accept=".jpg,.jpeg,.png,.webp,.gif,.bmp,.tif,.tiff" required>
+                        <span class="upload-mark">+</span>
+                        <strong>Drop an image here</strong>
+                        <small>or click to browse</small>
+                        <span class="file-name">JPG, PNG, WebP, GIF, BMP or TIFF</span>
+                    </label>
+                    <div class="form-grid">
+                        <label>Output format
+                            <select name="output_format" required>
+                                <option value="jpg">JPG</option><option value="png">PNG</option>
+                                <option value="webp">WebP</option><option value="gif">GIF</option>
+                                <option value="bmp">BMP</option><option value="tiff">TIFF</option>
+                            </select>
+                        </label>
+                        <label>Quality
+                            <input name="quality" type="number" min="1" max="100" value="82" required>
+                        </label>
                     </div>
+                    <button class="primary-button" type="submit">Convert image <span>→</span></button>
+                </form>
+            </section>
 
-                    <div class="output-format">
-                        <label for="output_format">Output Format:</label>
-                        <select id="output_format" name="output_format" required>
-                            <option value="jpg">JPG/JPEG</option>
-                            <option value="png">PNG</option>
-                            <option value="webp">WebP</option>
-                            <option value="gif">GIF</option>
-                            <option value="bmp">BMP</option>
-                            <option value="tiff">TIFF</option>
+            <section id="documentPanel" class="panel" role="tabpanel" hidden>
+                <form action="/document/convert" method="post" enctype="multipart/form-data">
+                    <label class="drop-zone" for="documentFile">
+                        <input id="documentFile" name="file" type="file" accept=".pdf,.xlsx,.html,.htm,.txt" required>
+                        <span class="upload-mark">+</span>
+                        <strong>Drop a document here</strong>
+                        <small>or click to browse</small>
+                        <span class="file-name">PDF, XLSX, HTML or TXT</span>
+                    </label>
+                    <label>Conversion
+                        <select id="documentConversion" name="conversion_type" required>
+                            <option value="">Choose a conversion</option>
+                            <option value="pdf_to_docx" data-accept=".pdf">PDF to DOCX</option>
+                            <option value="excel_to_pdf" data-accept=".xlsx">XLSX to PDF</option>
+                            <option value="create_csv_from_excel" data-accept=".xlsx">XLSX to CSV</option>
+                            <option value="html_to_pdf" data-accept=".html,.htm">HTML to PDF (safe text)</option>
+                            <option value="text_to_html" data-accept=".txt">TXT to HTML</option>
                         </select>
-                    </div>
-                </div>
+                    </label>
+                    <div id="sheetOption" hidden><label>Sheet name (optional)<input name="sheet_name" type="text" maxlength="100"></label></div>
+                    <div id="titleOption" hidden><label>Document title<input name="title" type="text" maxlength="120" value="Converted Document"></label></div>
+                    <button class="primary-button" type="submit">Convert document <span>→</span></button>
+                </form>
+            </section>
 
-                <label for="quality">Quality (1-100):</label>
-                <input type="number" id="quality" name="quality" min="1" max="100" value="80">
-
-                <input type="submit" value="Convert Image">
-            </form>
-
-            <div id="imageResult" class="result-container hidden">
-                <h3>Conversion Result</h3>
-                <div id="imageResultContent"></div>
+            <div id="result" class="result" hidden>
+                <div><span class="success-mark">✓</span><div><strong>Conversion complete</strong><p>Your download is ready in this browser.</p></div></div>
+                <a id="downloadLink" class="download-button" download>Download file</a>
+                <img id="imagePreview" alt="Converted image preview" hidden>
             </div>
-        </div>
-
-        <!-- Document Conversion Tab -->
-        <div id="docTab" class="tab-content">
-            <h2>Document Conversion</h2>
-
-            <div id="docLoading" class="loading">
-                <div class="loading-spinner"></div>
-                <p>Processing your document...</p>
-            </div>
-
-            <form id="docConversionForm" action="/document/convert" method="post" enctype="multipart/form-data">
-                <div id="docDropZone" class="file-upload drop-zone">
-                    <input type="file" id="doc_file" name="file" accept=".docx,.xlsx,.html,.txt,.pdf" required>
-                    <label for="doc_file" class="file-upload-label">Select Document</label>
-                    <p>Or drag and drop files here</p>
-                    <div class="doc-preview"></div>
-                </div>
-
-                <label for="doc_conversion">Conversion Type:</label>
-                <select id="doc_conversion" name="conversion_type" required>
-                    <option value="">Select Conversion</option>
-                    <option value="docx_to_pdf">DOCX to PDF</option>
-                    <option value="html_to_pdf">HTML to PDF</option>
-                    <option value="excel_to_pdf">Excel to PDF</option>
-                    <option value="pdf_to_docx">PDF to DOCX</option>
-                    <option value="create_csv_from_excel">Excel to CSV</option>
-                    <option value="text_to_html">Text to HTML</option>
-                    <option value="image_to_text">Image to Text (OCR)</option>
-                </select>
-
-                <div id="excelOptions" class="hidden doc-options">
-                    <label for="sheet_name">Sheet Name (optional):</label>
-                    <input type="text" id="sheet_name" name="sheet_name" placeholder="Leave empty for first sheet">
-                </div>
-
-                <div id="htmlOptions" class="hidden doc-options">
-                    <label for="title">Document Title:</label>
-                    <input type="text" id="title" name="title" value="Converted Document">
-                </div>
-
-                <input type="submit" value="Convert Document">
-            </form>
-
-            <div id="docResult" class="result-container hidden">
-                <h3>Document Conversion Result</h3>
-                <div id="docResultContent"></div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Theme toggle functionality
-            const toggleSwitch = document.querySelector('#checkbox');
-            const body = document.body;
-
-            // Load theme preference
-            const savedTheme = localStorage.getItem('theme');
-            if (savedTheme === 'night' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                toggleSwitch.checked = true;
-                body.classList.add('night-mode');
-            }
-
-            // Theme switch event
-            toggleSwitch.addEventListener('change', function(e) {
-                if (e.target.checked) {
-                    body.classList.add('night-mode');
-                    localStorage.setItem('theme', 'night');
-                } else {
-                    body.classList.remove('night-mode');
-                    localStorage.setItem('theme', 'day');
-                }
-            });
-
-            // Tab functionality
-            const tabLinks = document.querySelectorAll('.tab-links');
-            tabLinks.forEach(link => {
-                link.addEventListener('click', function() {
-                    const tabId = this.getAttribute('data-tab');
-
-                    // Hide all tabs and remove active class
-                    document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');
-                    tabLinks.forEach(btn => btn.classList.remove('active'));
-
-                    // Show selected tab and add active class
-                    document.getElementById(tabId).style.display = 'block';
-                    this.classList.add('active');
-                });
-            });
-
-            // File input change handlers
-            const fileInputs = document.querySelectorAll('input[type="file"]');
-            fileInputs.forEach(input => {
-                input.addEventListener('change', function() {
-                    handleFiles(this.files, this);
-                });
-            });
-
-            // Doc conversion type change handler
-            document.getElementById('doc_conversion').addEventListener('change', function() {
-                const options = document.querySelectorAll('.doc-options');
-                options.forEach(option => option.classList.add('hidden'));
-
-                const conversion = this.value;
-                if (['excel_to_pdf', 'create_csv_from_excel'].includes(conversion)) {
-                    document.getElementById('excelOptions').classList.remove('hidden');
-                } else if (conversion === 'text_to_html') {
-                    document.getElementById('htmlOptions').classList.remove('hidden');
-                }
-            });
-
-            // Setup drop zones
-            setupDropZone('imageDropZone', 'image');
-            setupDropZone('docDropZone', 'doc_file');
-
-            // Form submission handlers
-            setupFormSubmission('imageConversionForm', 'imageLoading', 'imageResult', 'imageResultContent');
-            setupFormSubmission('docConversionForm', 'docLoading', 'docResult', 'docResultContent');
-        });
-
-        // Helper functions
-        function showNotification(message, type) {
-            const notification = document.getElementById('notification');
-            notification.innerHTML = message;
-            notification.className = 'notification ' + type;
-            notification.style.display = 'block';
-
-            setTimeout(() => {
-                notification.style.display = 'none';
-            }, 5000);
-        }
-
-        function detectImageFormat(file) {
-            const fileName = file.name.toLowerCase();
-            const fileExtension = fileName.substring(fileName.lastIndexOf('.') + 1);
-
-            const formatMap = {
-                'jpg': 'jpg', 'jpeg': 'jpg', 'png': 'png', 'webp': 'webp',
-                'gif': 'gif', 'bmp': 'bmp', 'tif': 'tiff', 'tiff': 'tiff'
-            };
-
-            return formatMap[fileExtension] || 'jpg';
-        }
-
-        function handleFiles(files, inputElement) {
-            if (!files.length) return;
-
-            const file = files[0];
-            const fileUploadContainer = inputElement.closest('.file-upload');
-            const previewDiv = fileUploadContainer.querySelector('.image-preview, .doc-preview');
-
-            if (!previewDiv) return;
-
-            // Auto-detect image format
-            if (inputElement.id === 'image' && file.type.match('image.*')) {
-                const inputFormatSelect = document.getElementById('input_format');
-                const detectedFormat = detectImageFormat(file);
-
-                Array.from(inputFormatSelect.options).forEach((option, index) => {
-                    if (option.value === detectedFormat) {
-                        inputFormatSelect.selectedIndex = index;
-                    }
-                });
-            }
-
-            // Create preview
-            if (file.type.match('image.*')) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    previewDiv.innerHTML = `
-                        <img src="${e.target.result}" alt="Preview">
-                        <p>${file.name}</p>
-                    `;
-                };
-                reader.readAsDataURL(file);
-            } else {
-                let iconClass = 'file';
-
-                if (file.name.endsWith('.pdf')) {
-                    iconClass = 'file-pdf';
-                } else if (file.name.endsWith('.docx') || file.name.endsWith('.doc')) {
-                    iconClass = 'file-word';
-                } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-                    iconClass = 'file-excel';
-                }
-
-                previewDiv.innerHTML = `
-                    <div class="file-icon ${iconClass}"></div>
-                    <p>${file.name}</p>
-                `;
-            }
-        }
-
-        function setupDropZone(dropZoneId, inputId) {
-            const dropZone = document.getElementById(dropZoneId);
-            const inputElement = document.getElementById(inputId);
-
-            if (!dropZone || !inputElement) return;
-
-            // Event handler functions
-            function preventDefaults(e) {
-                e.preventDefault();
-                e.stopPropagation();
-            }
-
-            function highlight() {
-                dropZone.classList.add('dragover');
-            }
-
-            function unhighlight() {
-                dropZone.classList.remove('dragover');
-            }
-
-            function handleDrop(e) {
-                const files = e.dataTransfer.files;
-                handleFiles(files, inputElement);
-
-                // Set the file to the input element
-                const dataTransfer = new DataTransfer();
-                dataTransfer.items.add(files[0]);
-                inputElement.files = dataTransfer.files;
-            }
-
-            // Set up event listeners
-            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-                dropZone.addEventListener(eventName, preventDefaults, false);
-            });
-
-            ['dragenter', 'dragover'].forEach(eventName => {
-                dropZone.addEventListener(eventName, highlight, false);
-            });
-
-            ['dragleave', 'drop'].forEach(eventName => {
-                dropZone.addEventListener(eventName, unhighlight, false);
-            });
-
-            dropZone.addEventListener('drop', handleDrop, false);
-        }
-
-        function setupFormSubmission(formId, loadingId, resultId, resultContentId) {
-            const form = document.getElementById(formId);
-            const loadingDiv = document.getElementById(loadingId);
-            const resultDiv = document.getElementById(resultId);
-            const resultContentDiv = document.getElementById(resultContentId);
-
-            form.addEventListener('submit', function(e) {
-                e.preventDefault();
-
-                const formData = new FormData(this);
-
-                loadingDiv.style.display = 'block';
-                resultDiv.classList.add('hidden');
-
-                fetch(this.action, {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    loadingDiv.style.display = 'none';
-
-                    if (data.success) {
-                        showNotification('Conversion successful!', 'success');
-                        resultDiv.classList.remove('hidden');
-
-                        if (formId === 'docConversionForm') {
-                            const conversion = document.getElementById('doc_conversion').value;
-
-                            if (conversion === 'image_to_text') {
-                                resultContentDiv.innerHTML = `
-                                    <div class="ocr-result">
-                                        <h4>Extracted Text:</h4>
-                                        <pre>${data.text || ''}</pre>
-                                        <a href="${data.download_url}" class="download-btn" download>Download Text File</a>
-                                    </div>
-                                `;
-                            } else if (conversion === 'text_to_html') {
-                                const safeHtml = data.text || data.content || 'HTML preview not available';
-                                resultContentDiv.innerHTML = `
-                                    <div class="html-preview">
-                                        <h4>HTML Preview:</h4>
-                                        <iframe srcdoc="${safeHtml}" style="width: 100%; height: 300px; border: 1px solid #ddd;"></iframe>
-                                        <a href="${data.download_url}" class="download-btn" download>Download HTML File</a>
-                                    </div>
-                                `;
-                            } else {
-                                resultContentDiv.innerHTML = `
-                                    <p>Your document has been successfully converted!</p>
-                                    <a href="${data.download_url}" class="download-btn" download>Download Converted Document</a>
-                                `;
-                            }
-                        } else {
-                            resultContentDiv.innerHTML = `
-                                <p>Your image has been successfully converted!</p>
-                                <a href="${data.download_url}" class="download-btn" download>Download Converted Image</a>
-                                ${data.download_url ? `<div class="preview-image"><img src="${data.download_url}" alt="Converted image preview"></div>` : ''}
-                            `;
-                        }
-                    } else {
-                        showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
-                    }
-                })
-                .catch(error => {
-                    loadingDiv.style.display = 'none';
-                    showNotification('Error: ' + error.message, 'error');
-                });
-            });
-        }
-    </script>
+        </section>
+    </main>
+    <footer><span>321Convert</span><span>Files are temporary. Privacy is permanent.</span></footer>
 </body>
 </html>

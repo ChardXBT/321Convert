@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: 321convert
+    runtime: python
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: gunicorn --workers 2 --threads 2 --timeout 120 --max-requests 250 --max-requests-jitter 25 app:app
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.10
+      - key: TRUST_PROXY
+        value: "true"
+      - key: MAX_UPLOAD_BYTES
+        value: "26214400"
+      - key: MAX_OUTPUT_BYTES
+        value: "78643200"

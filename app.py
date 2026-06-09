@@ -1,386 +1,216 @@
-from flask import Flask, render_template, request, send_file, jsonify, url_for
-import time
-import threading
-import atexit
-import zipfile
+import io
+import logging
 import os
+import tempfile
+import threading
+import time
+import zipfile
+from collections import defaultdict, deque
+from pathlib import Path
 
-# Import needed for converter registration
+from flask import Flask, jsonify, render_template, request, send_file
+from werkzeug.exceptions import RequestEntityTooLarge
+from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.utils import secure_filename
+
 from core.converter_factory import ConverterFactory
-# Import conversions to register all converters
-from conversions import *  # noqa: F401
+from conversions import *  # noqa: F401,F403
+
+
+logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
+logger = logging.getLogger(__name__)
+
+MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", 25 * 1024 * 1024))
+MAX_OUTPUT_BYTES = int(os.getenv("MAX_OUTPUT_BYTES", 75 * 1024 * 1024))
+MAX_ARCHIVE_BYTES = int(os.getenv("MAX_ARCHIVE_BYTES", 100 * 1024 * 1024))
+MAX_ARCHIVE_FILES = int(os.getenv("MAX_ARCHIVE_FILES", 500))
+RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", 20))
+RATE_LIMIT_WINDOW = int(os.getenv("RATE_LIMIT_WINDOW", 600))
+
+IMAGE_FORMATS = {"jpg", "jpeg", "png", "webp", "gif", "bmp", "tif", "tiff"}
+IMAGE_OUTPUTS = {"jpg": "JPEG", "jpeg": "JPEG", "png": "PNG", "webp": "WEBP", "gif": "GIF", "bmp": "BMP", "tif": "TIFF", "tiff": "TIFF"}
+DOCUMENT_CONVERSIONS = {
+    "html_to_pdf": ({"html", "htm"}, "pdf"),
+    "excel_to_pdf": ({"xlsx"}, "pdf"),
+    "pdf_to_docx": ({"pdf"}, "docx"),
+    "create_csv_from_excel": ({"xlsx"}, "csv"),
+    "text_to_html": ({"txt"}, "html"),
+}
+MIME_TYPES = {
+    "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp",
+    "gif": "image/gif", "bmp": "image/bmp", "tif": "image/tiff", "tiff": "image/tiff",
+    "pdf": "application/pdf", "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "csv": "text/csv", "html": "text/html", "txt": "text/plain",
+}
 
 app = Flask(__name__)
+app.config.update(MAX_CONTENT_LENGTH=MAX_UPLOAD_BYTES, MAX_FORM_MEMORY_SIZE=MAX_UPLOAD_BYTES, MAX_FORM_PARTS=20)
+if os.getenv("TRUST_PROXY", "true").lower() == "true":
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
-# Configuration
-UPLOAD_FOLDER = 'uploads'
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-FILE_EXPIRATION = 3600  # 1 hour
-
-# Ensure uploads folder exists
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
-
-# Dictionary to track uploaded files and their timestamp
-file_tracker = {}
-
-# Define MIME types for each format
-MIME_TYPES = {
-    'jpg': 'image/jpeg',
-    'jpeg': 'image/jpeg',
-    'png': 'image/png',
-    'webp': 'image/webp',
-    'gif': 'image/gif',
-    'bmp': 'image/bmp',
-    'tiff': 'image/tiff',
-    'pdf': 'application/pdf',
-    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'csv': 'text/csv',
-    'html': 'text/html',
-    'txt': 'text/plain',
-    'zip': 'application/zip'
-}
-
-# File and conversion settings
-FORMAT_MAPPING = {
-    'jpg': 'JPEG', 'jpeg': 'JPEG', 'png': 'PNG',
-    'webp': 'WEBP', 'gif': 'GIF', 'bmp': 'BMP', 'tiff': 'TIFF'
-}
-
-OUTPUT_EXTENSIONS = {
-    'docx_to_pdf': 'pdf',
-    'html_to_pdf': 'pdf',
-    'excel_to_pdf': 'pdf',
-    'pdf_to_docx': 'docx',
-    'create_csv_from_excel': 'csv',
-    'text_to_html': 'html',
-    'image_to_text': 'txt'
-}
+rate_limit_lock = threading.Lock()
+rate_limit_hits = defaultdict(deque)
 
 
-def cleanup_files():
-    """Clean up expired files in the uploads folder"""
-    while True:
-        current_time = time.time()
-
-        # Find and remove expired files
-        for filepath, timestamp in list(file_tracker.items()):
-            if current_time - timestamp > FILE_EXPIRATION and os.path.exists(filepath):
-                try:
-                    os.remove(filepath)
-                    file_tracker.pop(filepath, None)
-                except Exception as e:
-                    print(f"Error removing file {filepath}: {e}")
-
-        # Sleep for 5 minutes before checking again
-        time.sleep(300)
+def error_response(message, status=400):
+    return jsonify({"success": False, "error": message}), status
 
 
-def track_file(filepath):
-    """Add file to tracking dictionary with current timestamp"""
-    file_tracker[filepath] = time.time()
+def get_extension(filename):
+    return Path(filename).suffix.lower().lstrip(".")
 
 
-def cleanup_all_files():
-    """Remove all files in uploads folder when app shuts down"""
+def safe_upload(file_key, directory, allowed_extensions):
+    upload = request.files.get(file_key)
+    if not upload or not upload.filename:
+        raise ValueError("Choose a file to convert.")
+    extension = get_extension(upload.filename)
+    if extension not in allowed_extensions:
+        raise ValueError(f"This conversion does not accept .{extension or 'unknown'} files.")
+    name = secure_filename(upload.filename) or f"upload.{extension}"
+    path = Path(directory, f"source_{name}")
+    upload.save(path)
+    if not path.is_file() or path.stat().st_size == 0:
+        raise ValueError("The uploaded file is empty.")
+    validate_archive(path)
+    return path
+
+
+def validate_archive(path):
+    if path.suffix.lower() not in {".xlsx", ".docx"}:
+        return
     try:
-        for filename in os.listdir(app.config['UPLOAD_FOLDER']):
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            if os.path.isfile(file_path):
-                os.remove(file_path)
-    except Exception as e:
-        print(f"Error during shutdown cleanup: {e}")
+        with zipfile.ZipFile(path) as archive:
+            members = archive.infolist()
+            total_size = sum(member.file_size for member in members)
+            if len(members) > MAX_ARCHIVE_FILES or total_size > MAX_ARCHIVE_BYTES:
+                raise ValueError("The document expands beyond the processing limit.")
+            if any(member.filename.startswith(("/", "\\")) or ".." in Path(member.filename).parts for member in members):
+                raise ValueError("The document contains unsafe archive paths.")
+    except zipfile.BadZipFile as exc:
+        raise ValueError("The document is not a valid Office file.") from exc
 
 
-def handle_file_upload(file_key='file'):
-    """Handle file upload and return filepath"""
-    if file_key not in request.files or request.files[file_key].filename == '':
-        return None
-
-    file = request.files[file_key]
-    filename = "original_" + os.path.basename(file.filename)
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    file.save(filepath)
-    track_file(filepath)
-    return filepath
+def validate_number(value, name, minimum, maximum, default):
+    try:
+        number = int(value if value is not None else default)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a number.") from exc
+    if not minimum <= number <= maximum:
+        raise ValueError(f"{name} must be between {minimum} and {maximum}.")
+    return number
 
 
-def create_zip_archive(files, zip_name):
-    """Create a zip archive from a list of files"""
-    zip_path = os.path.join(app.config['UPLOAD_FOLDER'], zip_name)
-    with zipfile.ZipFile(zip_path, 'w') as zipf:
-        for file_path in files:
-            zipf.write(file_path, os.path.basename(file_path))
-    track_file(zip_path)
-    return zip_path
+def file_response(path, download_name):
+    path = Path(path)
+    if not path.is_file():
+        raise RuntimeError("The conversion did not create an output file.")
+    if path.stat().st_size > MAX_OUTPUT_BYTES:
+        raise ValueError("The converted file is too large to return safely.")
+    data = io.BytesIO(path.read_bytes())
+    return send_file(data, mimetype=MIME_TYPES.get(get_extension(download_name), "application/octet-stream"),
+                     as_attachment=True, download_name=download_name, max_age=0)
 
 
-@app.route('/', methods=['GET'])
+def limited():
+    now = time.monotonic()
+    client = request.remote_addr or "unknown"
+    with rate_limit_lock:
+        hits = rate_limit_hits[client]
+        while hits and hits[0] <= now - RATE_LIMIT_WINDOW:
+            hits.popleft()
+        if len(hits) >= RATE_LIMIT_REQUESTS:
+            return True
+        hits.append(now)
+        if len(rate_limit_hits) > 10_000:
+            rate_limit_hits.clear()
+    return False
+
+
+@app.before_request
+def protect_conversion_routes():
+    if request.method == "POST" and limited():
+        return error_response("Too many conversions. Please wait a few minutes and try again.", 429)
+
+
+@app.after_request
+def secure_headers(response):
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; img-src 'self' blob: data:; style-src 'self'; script-src 'self'; "
+        "frame-src blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+    )
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=()"
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.errorhandler(RequestEntityTooLarge)
+def upload_too_large(_error):
+    return error_response(f"Files must be smaller than {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.", 413)
+
+
+@app.route("/")
 def index():
-    return render_template('index.html')
+    return render_template("index.html", max_upload_mb=MAX_UPLOAD_BYTES // (1024 * 1024))
 
 
-@app.route('/downloads/<filename>')
-def download_file(filename):
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    # Reset file timer on download
-    if filepath in file_tracker:
-        file_tracker[filepath] = time.time()
-
-    # Get the correct MIME type for the file
-    extension = filename.split('.')[-1].lower()
-    mimetype = MIME_TYPES.get(extension, 'application/octet-stream')
-
-    return send_file(filepath, as_attachment=True, mimetype=mimetype)
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok"})
 
 
-@app.route('/previews/<filename>')
-def preview_file(filename):
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    # Reset file timer on preview
-    if filepath in file_tracker:
-        file_tracker[filepath] = time.time()
-
-    extension = filename.split('.')[-1].lower()
-    mimetype = MIME_TYPES.get(extension, 'application/octet-stream')
-
-    return send_file(filepath, mimetype=mimetype)
-
-
-@app.route('/convert', methods=['POST'])
+@app.route("/convert", methods=["POST"])
 def convert_image_route():
-    filepath = handle_file_upload('image')
-    if not filepath:
-        return jsonify({"success": False, "error": "No file provided"}), 400
-
     try:
-        input_format = request.form['input_format'].lower()
-        output_format = request.form['output_format'].lower()
-        quality = int(request.form.get('quality', 80))
-
-        output_pil_format = FORMAT_MAPPING.get(output_format)
-        if not output_pil_format:
-            return jsonify({"success": False, "error": f"Unsupported output format: {output_format}"}), 400
-
-        # Convert image
-        if input_format == 'gif' and output_format != 'gif':
-            from conversions.image_converter import convert_from_gif
-            converted_filepath = convert_from_gif(filepath, output_pil_format, quality=quality)
-        else:
-            from conversions.image_converter import convert_image
-            converted_filepath = convert_image(filepath, output_pil_format, quality=quality)
-
-        track_file(converted_filepath)
-        converted_filename = os.path.basename(converted_filepath)
-
-        return jsonify({
-            "success": True,
-            "download_url": url_for('download_file', filename=converted_filename),
-            "preview_url": url_for('preview_file', filename=converted_filename)
-        })
-
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        output_extension = request.form.get("output_format", "").lower()
+        if output_extension not in IMAGE_OUTPUTS:
+            return error_response("Choose a supported output format.")
+        quality = validate_number(request.form.get("quality"), "Quality", 1, 100, 82)
+        with tempfile.TemporaryDirectory(prefix="321convert-") as directory:
+            source = safe_upload("image", directory, IMAGE_FORMATS)
+            result = ConverterFactory.convert(
+                "convert_image", str(source), output_format=IMAGE_OUTPUTS[output_extension], quality=quality
+            )
+            return file_response(result, f"{source.stem.removeprefix('source_')}_converted.{output_extension}")
+    except ValueError as exc:
+        return error_response(str(exc))
+    except Exception:
+        logger.exception("Image conversion failed")
+        return error_response("The image could not be converted. It may be damaged or unsupported.", 422)
 
 
-@app.route('/pdf/convert', methods=['POST'])
-def convert_pdf_route():
-    filepath = handle_file_upload()
-    if not filepath:
-        return jsonify({"success": False, "error": "No file provided"}), 400
-
-    try:
-        conversion_type = request.form['conversion_type']
-
-        # Set up parameters based on conversion type
-        params = {}
-        if conversion_type == 'pdf_to_images':
-            params['dpi'] = int(request.form.get('dpi', 300))
-            params['format'] = request.form.get('format', 'PNG')
-        elif conversion_type == 'compress_pdf':
-            params['quality'] = request.form.get('quality', 'medium')
-        elif conversion_type == 'rotate_pdf_pages':
-            params['rotation'] = int(request.form.get('rotation', 90))
-            pages = request.form.get('pages', '')
-            if pages:
-                params['pages'] = [int(p) for p in pages.split(',')]
-        elif conversion_type in ('encrypt_pdf', 'decrypt_pdf'):
-            params['password'] = request.form.get('password', '')
-            if conversion_type == 'encrypt_pdf' and request.form.get('owner_password'):
-                params['owner_password'] = request.form.get('owner_password')
-
-        # Set output path
-        output_file = os.path.join(app.config['UPLOAD_FOLDER'], "converted_" + os.path.basename(filepath))
-        params['output_path'] = output_file
-
-        # Convert the file
-        result = ConverterFactory.convert(conversion_type, filepath, **params)
-
-        # Handle text extraction
-        if conversion_type == 'extract_text_from_pdf' and isinstance(result, str):
-            text_file = os.path.join(app.config['UPLOAD_FOLDER'], "extracted_text.txt")
-            with open(text_file, 'w', encoding='utf-8') as f:
-                f.write(result)
-            track_file(text_file)
-            return jsonify({
-                "success": True,
-                "text": result,
-                "download_url": url_for('download_file', filename=os.path.basename(text_file))
-            })
-
-        # Handle PDF to images
-        elif conversion_type == 'pdf_to_images' and isinstance(result, list):
-            for img_path in result:
-                track_file(img_path)
-
-            zip_path = create_zip_archive(result, "converted_images.zip")
-
-            # Create image URLs for preview
-            images = [{"url": url_for('preview_file', filename=os.path.basename(img_path))} for img_path in result]
-
-            return jsonify({
-                "success": True,
-                "images": images,
-                "format": params['format'],
-                "download_all_url": url_for('download_file', filename=os.path.basename(zip_path))
-            })
-
-        # Handle single file result
-        elif isinstance(result, str) and os.path.isfile(result):
-            track_file(result)
-            return jsonify({
-                "success": True,
-                "download_url": url_for('download_file', filename=os.path.basename(result))
-            })
-
-        # Handle multiple file results
-        elif isinstance(result, list) and all(os.path.isfile(f) for f in result):
-            for file_path in result:
-                track_file(file_path)
-
-            zip_path = create_zip_archive(result, "converted_files.zip")
-
-            return jsonify({
-                "success": True,
-                "download_url": url_for('download_file', filename=os.path.basename(zip_path))
-            })
-
-        return jsonify({"success": False, "error": "Unexpected result format"}), 500
-
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-@app.route('/document/convert', methods=['POST'])
+@app.route("/document/convert", methods=["POST"])
 def convert_document_route():
-    filepath = handle_file_upload()
-    if not filepath:
-        return jsonify({"success": False, "error": "No file provided"}), 400
-
+    conversion = request.form.get("conversion_type", "")
+    if conversion not in DOCUMENT_CONVERSIONS:
+        return error_response("Choose a supported conversion.")
+    allowed_extensions, output_extension = DOCUMENT_CONVERSIONS[conversion]
     try:
-        conversion_type = request.form['conversion_type']
+        with tempfile.TemporaryDirectory(prefix="321convert-") as directory:
+            source = safe_upload("file", directory, allowed_extensions)
+            output = Path(directory, f"converted.{output_extension}")
+            params = {"output_path": str(output)}
+            if conversion in {"excel_to_pdf", "create_csv_from_excel"}:
+                sheet_name = request.form.get("sheet_name", "").strip()
+                if sheet_name:
+                    params["sheet_name"] = sheet_name[:100]
+            elif conversion == "text_to_html":
+                params["title"] = request.form.get("title", "Converted Document").strip()[:120]
+            result = ConverterFactory.convert(conversion, str(source), **params)
+            if isinstance(result, str) and Path(result).is_file():
+                output = Path(result)
+            base = source.stem.removeprefix("source_")
+            return file_response(output, f"{base}_converted.{output_extension}")
+    except ValueError as exc:
+        return error_response(str(exc), 422)
+    except Exception:
+        logger.exception("Document conversion failed: %s", conversion)
+        return error_response("The document could not be converted. It may be damaged or unsupported.", 422)
 
-        # Get additional parameters
-        params = {}
-        if conversion_type in ('excel_to_pdf', 'create_csv_from_excel') and request.form.get('sheet_name'):
-            params['sheet_name'] = request.form.get('sheet_name')
-        elif conversion_type == 'text_to_html':
-            params['title'] = request.form.get('title', 'Converted Document')
-
-        # Set output path with proper extension
-        base_name = os.path.splitext(os.path.basename(filepath))[0]
-        ext = OUTPUT_EXTENSIONS.get(conversion_type, 'txt')
-        output_file = os.path.join(app.config['UPLOAD_FOLDER'], base_name + "_converted." + ext)
-        params['output_path'] = output_file
-
-        # Perform conversion
-        result = ConverterFactory.convert(conversion_type, filepath, **params)
-
-        # Track the output file
-        if os.path.exists(output_file):
-            track_file(output_file)
-        elif isinstance(result, str) and os.path.isfile(result):
-            output_file = result
-            track_file(output_file)
-
-        # Handle image to text
-        if conversion_type == 'image_to_text':
-            if isinstance(result, str):
-                with open(output_file, 'w', encoding='utf-8') as f:
-                    f.write(result)
-                track_file(output_file)
-
-                download_url = url_for('download_file', filename=os.path.basename(output_file))
-                return jsonify({
-                    "success": True,
-                    "text": result,
-                    "download_url": download_url
-                })
-
-            download_url = url_for('download_file', filename=os.path.basename(output_file))
-            return jsonify({
-                "success": True,
-                "text": "Text extraction succeeded",
-                "download_url": download_url
-            })
-
-        # Handle text to HTML
-        elif conversion_type == 'text_to_html':
-            download_url = url_for('download_file', filename=os.path.basename(output_file))
-
-            with open(output_file, 'r', encoding='utf-8') as f:
-                html_content = f.read()
-
-            import html
-            safe_html = html.escape(html_content)
-
-            return jsonify({
-                "success": True,
-                "html_preview": safe_html,
-                "download_url": download_url
-            })
-
-        # Handle other conversions
-        else:
-            if os.path.isfile(output_file):
-                download_url = url_for('download_file', filename=os.path.basename(output_file))
-                return jsonify({
-                    "success": True,
-                    "download_url": download_url
-                })
-            elif isinstance(result, str) and os.path.isfile(result):
-                download_url = url_for('download_file', filename=os.path.basename(result))
-                return jsonify({
-                    "success": True,
-                    "download_url": download_url
-                })
-            else:
-                return jsonify({
-                    "success": False,
-                    "error": "Conversion failed: Output file not created"
-                }), 500
-
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-@app.route('/available-converters', methods=['GET'])
-def get_available_converters():
-    """Return a list of all registered converters"""
-    converters = ConverterFactory.get_converters()
-    return jsonify(list(converters.keys()))
-
-
-# Register cleanup on shutdown
-atexit.register(cleanup_all_files)
-
-# Start cleanup thread
-cleanup_thread = threading.Thread(target=cleanup_files, daemon=True)
-cleanup_thread.start()
 
 if __name__ == "__main__":
-    # Use environment variables for configuration
-    port = int(os.environ.get('PORT', 5000))
-    debug = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
-    app.run(host='0.0.0.0', port=port, debug=debug)
+    app.run(host="127.0.0.1", port=int(os.getenv("PORT", 5000)), debug=False)

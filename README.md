@@ -1,92 +1,59 @@
-# File Converter Project [321Convert]
+# 321Convert
 
-## Description
+A privacy-first Flask file converter deployed on Render.
 
-A web-based file conversion tool that allows users to convert between different document and image formats with ease.
+## Privacy model
 
-**Live Demo:** [321Convert](https://three21convert.onrender.com)
+- Files are processed inside a unique operating-system temporary directory.
+- Results are returned directly in the conversion request as private attachments.
+- Temporary input and output files are deleted before the response is sent.
+- There are no public download URLs, accounts, databases, analytics, or permanent uploads.
 
-## Features
+No hosted service can honestly promise to be "unhackable." This project reduces risk with strict conversion allowlists, bounded uploads and outputs, archive-bomb checks, image decompression-bomb protection, rate limiting, sanitized errors, security headers, and a strict Content Security Policy.
 
-- Convert images between multiple formats
-- Convert documents between multiple formats
-- Simple and intuitive web interface
-- Fast and efficient conversion process
-- No need for installation accessible from the web
+## Supported conversions
 
-## Installation
+- Images: JPG, PNG, WebP, GIF, BMP, and TIFF
+- PDF to DOCX text extraction
+- XLSX to PDF or CSV
+- HTML to PDF as inert text
+- TXT to escaped HTML
 
-### Prerequisites
+DOCX to PDF and OCR are intentionally not advertised because they require system software that is not available on a standard Render Python service.
 
-- Python 3.8+
-- pip (Python package manager)
+## Local setup
 
-### Setup
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python app.py
+```
 
-1. **Clone the repository**
+Open `http://127.0.0.1:5000`.
 
-   ```sh
-   git clone https://github.com/YOUR-USERNAME/File_Converter.git
-   cd File_Converter
-   ```
+## Tests
 
-2. **Create a virtual environment**
+```powershell
+python -m unittest discover -v
+python -m pip check
+```
 
-   ```sh
-   python -m venv venv
-   source venv/bin/activate  # On Windows use `venv\Scripts\activate`
-   ```
+## Render deployment
 
-3. **Install dependencies**
+The repository includes `render.yaml` and a hardened `Procfile`. Connect the public GitHub repository to Render and deploy the Blueprint. Do not add secrets: the app does not require any.
 
-   ```sh
-   pip install -r requirements.txt
-   ```
+Useful environment controls:
 
-4. **Run the application**
-
-   ```sh
-   python app.py
-   ```
-
-5. **Access the application**
-   Open your web browser and go to `http://127.0.0.1:5000/`
-
-## Technologies Used
-- **Flask**: Web framework for Python, used for handling requests and routing.
-- **Pillow**: Image processing library, used for image conversions and transformations.
-- **pdf2docx**: Library for converting PDFs to DOCX format.
-- **pandas**: Data analysis and manipulation library, especially for Excel and CSV file handling.
-- **HTML/CSS**: For designing and structuring the frontend of the web application.
-- **Flask-CORS**: Handles Cross-Origin Resource Sharing (CORS) to allow secure communication between the frontend and backend.
-- **gunicorn**: WSGI HTTP server for deploying the Flask app in a production environment.
-- **python-docx**: Library for creating, modifying, and converting DOCX files.
-- **docx2pdf**: Converts DOCX files to PDFs.
-- **docxcompose**: Python library for merging and composing DOCX documents.
-- **pypdf**: For working with PDF files, including reading and extracting text.
-- **python-dotenv**: Loads environment variables from a `.env` file for configuration.
-- **openpyxl**: Library for reading and writing Excel (XLSX) files.
-- **xhtml2pdf**: Converts HTML to PDF.
-
-## Future Improvements
-- Currently none
-
-
-## Contributions
-
-Contributions are welcome! To contribute:
-
-1. Fork the repository
-2. Create a new branch (`git checkout -b feature-branch`)
-3. Commit your changes (`git commit -m "Add new feature"`)
-4. Push to the branch (`git push origin feature-branch`)
-5. Open a pull request
-
-For major changes, please open an issue first to discuss what you'd like to change.
+| Variable | Default | Purpose |
+| --- | ---: | --- |
+| `MAX_UPLOAD_BYTES` | 26214400 | Maximum request size |
+| `MAX_OUTPUT_BYTES` | 78643200 | Maximum returned file size |
+| `MAX_ARCHIVE_BYTES` | 104857600 | Maximum expanded Office archive size |
+| `RATE_LIMIT_REQUESTS` | 20 | Requests allowed per window and worker |
+| `RATE_LIMIT_WINDOW` | 600 | Rate-limit window in seconds |
+| `TRUST_PROXY` | true | Trust one Render proxy hop |
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-**Developed with ❤️ by ChardXBT**
-
+MIT
