@@ -126,3 +126,18 @@ themeToggle.addEventListener("click", () => {
   localStorage.setItem("theme", document.body.classList.contains("dark") ? "dark" : "light");
   syncThemeToggle();
 });
+
+document.querySelectorAll("[data-dialog-open]").forEach((link) => {
+  link.addEventListener("click", (event) => {
+    event.preventDefault();
+    const dialog = document.querySelector(`#${link.dataset.dialogOpen}`);
+    if (dialog && !dialog.open) dialog.showModal();
+  });
+});
+
+document.querySelectorAll(".legal-dialog").forEach((dialog) => {
+  dialog.querySelector("[data-dialog-close]").addEventListener("click", () => dialog.close());
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+});

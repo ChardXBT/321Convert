@@ -61,3 +61,8 @@ Useful environment controls:
 ## License
 
 MIT
+
+## Legal
+
+- [Terms of Service](TERMS.md)
+- [MIT License](LICENSE)

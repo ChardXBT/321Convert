@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Private, temporary image and document conversion.">
     <title>321Convert | Private file converter</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260609-3') }}">
-    <script src="{{ url_for('static', filename='app.js', v='20260609-3') }}" defer></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260609-4') }}">
+    <script src="{{ url_for('static', filename='app.js', v='20260609-4') }}" defer></script>
 </head>
 <body>
     <header class="site-header">
@@ -28,7 +28,7 @@
         <section class="intro">
             <p class="overline">Instant and safe</p>
             <h1>Convert files in seconds.</h1>
-            <p class="intro-copy">Fast, focused conversion for images and documents. Files are processed temporarily, delivered directly, and never permanently stored.</p>
+            <p class="intro-copy">Fast conversion for images and documents. Files are delivered directly and never permanently stored.</p>
             <dl class="privacy-details">
                 <div><dt>Storage</dt><dd>Temporary only</dd></div>
                 <div><dt>Public links</dt><dd>Never</dd></div>
@@ -42,7 +42,7 @@
                     <p class="section-label">Converter</p>
                     <h2 id="converterTitle">Choose a file to get started</h2>
                 </div>
-                <p>Files are removed when processing completes.</p>
+                <p>Removed after processing.</p>
             </div>
 
             <div class="tabs" role="tablist" aria-label="Converter type">
@@ -100,20 +100,41 @@
                 </form>
             </section>
 
-            <div id="result" class="result" hidden>
+            <div id="result" class="result" aria-live="polite" hidden>
                 <div class="result-copy"><span class="result-indicator" aria-hidden="true"></span><div><strong>Conversion complete</strong><p>Your file is ready to download.</p></div></div>
                 <a id="downloadLink" class="download-button" download>Download converted file</a>
-                <img id="imagePreview" alt="Converted image preview" hidden>
+                <div class="preview-frame"><img id="imagePreview" alt="Converted image preview" hidden></div>
             </div>
-        </section>
-
-        <section class="assurance" aria-label="Privacy information">
-            <div><span>01</span><h3>Temporary processing</h3><p>Each conversion runs in an isolated temporary workspace.</p></div>
-            <div><span>02</span><h3>Direct delivery</h3><p>The converted file is returned directly to your browser.</p></div>
-            <div><span>03</span><h3>Automatic removal</h3><p>Input and output files are removed after the request completes.</p></div>
         </section>
     </main>
 
-    <footer><span>321Convert</span><span>Instant and safe.</span></footer>
+    <footer>
+        <span>321Convert</span>
+        <nav aria-label="Legal and project links">
+            <a href="#termsDialog" data-dialog-open="termsDialog">Terms</a>
+            <a href="#licenseDialog" data-dialog-open="licenseDialog">MIT License</a>
+            <a href="https://github.com/ChardXBT/321Convert" target="_blank" rel="noopener noreferrer">Open source</a>
+        </nav>
+    </footer>
+
+    <dialog id="termsDialog" class="legal-dialog" aria-labelledby="termsTitle">
+        <div class="dialog-header"><h2 id="termsTitle">Terms of Service</h2><button type="button" data-dialog-close aria-label="Close terms">Close</button></div>
+        <div class="dialog-content">
+            <p>By using 321Convert, you agree to use it only for files you are authorized to process and for lawful purposes.</p>
+            <p>The service is provided as-is without guarantees of availability, conversion accuracy, or fitness for a particular purpose. Do not upload highly sensitive files to any hosted conversion service.</p>
+            <p>Files are processed temporarily and removed after the request completes. The operator may limit or block abusive usage to protect the service.</p>
+        </div>
+    </dialog>
+
+    <dialog id="licenseDialog" class="legal-dialog" aria-labelledby="licenseTitle">
+        <div class="dialog-header"><h2 id="licenseTitle">MIT License</h2><button type="button" data-dialog-close aria-label="Close license">Close</button></div>
+        <div class="dialog-content license-copy">
+            <p>Copyright (c) 2025-2026 ChardXBT</p>
+            <p>Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:</p>
+            <p>The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.</p>
+            <p>THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</p>
+            <p><a href="https://github.com/ChardXBT/321Convert/blob/master/LICENSE" target="_blank" rel="noopener noreferrer">View license in the repository</a></p>
+        </div>
+    </dialog>
 </body>
 </html>

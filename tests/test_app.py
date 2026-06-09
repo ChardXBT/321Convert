@@ -67,6 +67,9 @@ class ConverterAppTests(unittest.TestCase):
         self.assertIn("object-src 'none'", response.headers["Content-Security-Policy"])
         self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
         self.assertEqual(response.headers["Cache-Control"], "no-store")
+        self.assertIn(b"Terms", response.data)
+        self.assertIn(b"MIT License", response.data)
+        self.assertIn(b"https://github.com/ChardXBT/321Convert", response.data)
 
     def test_https_has_hsts_and_static_files_are_cacheable(self):
         secure = self.client.get("/", base_url="https://example.test")
