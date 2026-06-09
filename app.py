@@ -7,18 +7,21 @@ import time
 import zipfile
 from collections import defaultdict, deque
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from flask import Flask, jsonify, render_template, request, send_file
 from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
 
+import conversions  # noqa: F401
 from core.converter_factory import ConverterFactory
-from conversions import *  # noqa: F401,F403
 
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger(__name__)
+logging.getLogger("pypdf").setLevel(logging.CRITICAL)
+logging.getLogger("pypdf._reader").setLevel(logging.CRITICAL)
 
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", 25 * 1024 * 1024))
 MAX_OUTPUT_BYTES = int(os.getenv("MAX_OUTPUT_BYTES", 75 * 1024 * 1024))
@@ -45,11 +48,15 @@ MIME_TYPES = {
 
 app = Flask(__name__)
 app.config.update(MAX_CONTENT_LENGTH=MAX_UPLOAD_BYTES, MAX_FORM_MEMORY_SIZE=MAX_UPLOAD_BYTES, MAX_FORM_PARTS=20)
-if os.getenv("TRUST_PROXY", "true").lower() == "true":
+if os.getenv("TRUST_PROXY", "false").lower() == "true":
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 rate_limit_lock = threading.Lock()
 rate_limit_hits = defaultdict(deque)
+
+
+class RequestValidationError(ValueError):
+    pass
 
 
 def error_response(message, status=400):
@@ -63,15 +70,21 @@ def get_extension(filename):
 def safe_upload(file_key, directory, allowed_extensions):
     upload = request.files.get(file_key)
     if not upload or not upload.filename:
-        raise ValueError("Choose a file to convert.")
+        raise RequestValidationError("Choose a file to convert.")
     extension = get_extension(upload.filename)
     if extension not in allowed_extensions:
-        raise ValueError(f"This conversion does not accept .{extension or 'unknown'} files.")
-    name = secure_filename(upload.filename) or f"upload.{extension}"
+        raise RequestValidationError(f"This conversion does not accept .{extension or 'unknown'} files.")
+    safe_name = secure_filename(upload.filename)
+    safe_stem = Path(safe_name).stem[:100] if safe_name else "upload"
+    name = f"{safe_stem}.{extension}"
     path = Path(directory, f"source_{name}")
     upload.save(path)
     if not path.is_file() or path.stat().st_size == 0:
-        raise ValueError("The uploaded file is empty.")
+        raise RequestValidationError("The uploaded file is empty.")
+    if extension == "pdf":
+        with path.open("rb") as pdf_file:
+            if pdf_file.read(5) != b"%PDF-":
+                raise RequestValidationError("The uploaded file is not a valid PDF.")
     validate_archive(path)
     return path
 
@@ -84,20 +97,20 @@ def validate_archive(path):
             members = archive.infolist()
             total_size = sum(member.file_size for member in members)
             if len(members) > MAX_ARCHIVE_FILES or total_size > MAX_ARCHIVE_BYTES:
-                raise ValueError("The document expands beyond the processing limit.")
+                raise RequestValidationError("The document expands beyond the processing limit.")
             if any(member.filename.startswith(("/", "\\")) or ".." in Path(member.filename).parts for member in members):
-                raise ValueError("The document contains unsafe archive paths.")
+                raise RequestValidationError("The document contains unsafe archive paths.")
     except zipfile.BadZipFile as exc:
-        raise ValueError("The document is not a valid Office file.") from exc
+        raise RequestValidationError("The document is not a valid Office file.") from exc
 
 
 def validate_number(value, name, minimum, maximum, default):
     try:
         number = int(value if value is not None else default)
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"{name} must be a number.") from exc
+        raise RequestValidationError(f"{name} must be a number.") from exc
     if not minimum <= number <= maximum:
-        raise ValueError(f"{name} must be between {minimum} and {maximum}.")
+        raise RequestValidationError(f"{name} must be between {minimum} and {maximum}.")
     return number
 
 
@@ -106,7 +119,7 @@ def file_response(path, download_name):
     if not path.is_file():
         raise RuntimeError("The conversion did not create an output file.")
     if path.stat().st_size > MAX_OUTPUT_BYTES:
-        raise ValueError("The converted file is too large to return safely.")
+        raise RequestValidationError("The converted file is too large to return safely.")
     data = io.BytesIO(path.read_bytes())
     return send_file(data, mimetype=MIME_TYPES.get(get_extension(download_name), "application/octet-stream"),
                      as_attachment=True, download_name=download_name, max_age=0)
@@ -116,35 +129,58 @@ def limited():
     now = time.monotonic()
     client = request.remote_addr or "unknown"
     with rate_limit_lock:
+        if len(rate_limit_hits) >= 10_000 and client not in rate_limit_hits:
+            for key, old_hits in list(rate_limit_hits.items())[:1000]:
+                while old_hits and old_hits[0] <= now - RATE_LIMIT_WINDOW:
+                    old_hits.popleft()
+                if not old_hits:
+                    rate_limit_hits.pop(key, None)
+            if len(rate_limit_hits) >= 10_000:
+                return True
         hits = rate_limit_hits[client]
         while hits and hits[0] <= now - RATE_LIMIT_WINDOW:
             hits.popleft()
         if len(hits) >= RATE_LIMIT_REQUESTS:
             return True
         hits.append(now)
-        if len(rate_limit_hits) > 10_000:
-            rate_limit_hits.clear()
     return False
+
+
+def cross_origin_request():
+    origin = request.headers.get("Origin")
+    if not origin:
+        return False
+    parsed = urlsplit(origin)
+    return parsed.scheme not in {"http", "https"} or parsed.netloc != request.host
 
 
 @app.before_request
 def protect_conversion_routes():
-    if request.method == "POST" and limited():
-        return error_response("Too many conversions. Please wait a few minutes and try again.", 429)
+    if request.method == "POST":
+        if cross_origin_request():
+            return error_response("Cross-origin conversion requests are not allowed.", 403)
+        if limited():
+            return error_response("Too many conversions. Please wait a few minutes and try again.", 429)
 
 
 @app.after_request
 def secure_headers(response):
     response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; img-src 'self' blob: data:; style-src 'self'; script-src 'self'; "
-        "frame-src blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+        "default-src 'self'; img-src 'self' blob:; style-src 'self'; script-src 'self'; "
+        "object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
     )
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=()"
     response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
-    response.headers["Cache-Control"] = "no-store"
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    if request.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "public, max-age=86400"
+    else:
+        response.headers["Cache-Control"] = "no-store"
+    if request.is_secure:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
 
 
@@ -176,10 +212,12 @@ def convert_image_route():
                 "convert_image", str(source), output_format=IMAGE_OUTPUTS[output_extension], quality=quality
             )
             return file_response(result, f"{source.stem.removeprefix('source_')}_converted.{output_extension}")
-    except ValueError as exc:
+    except RequestValidationError as exc:
         return error_response(str(exc))
-    except Exception:
-        logger.exception("Image conversion failed")
+    except RequestEntityTooLarge:
+        raise
+    except Exception as exc:
+        logger.warning("Image conversion failed (%s)", type(exc).__name__)
         return error_response("The image could not be converted. It may be damaged or unsupported.", 422)
 
 
@@ -205,10 +243,12 @@ def convert_document_route():
                 output = Path(result)
             base = source.stem.removeprefix("source_")
             return file_response(output, f"{base}_converted.{output_extension}")
-    except ValueError as exc:
+    except RequestValidationError as exc:
         return error_response(str(exc), 422)
-    except Exception:
-        logger.exception("Document conversion failed: %s", conversion)
+    except RequestEntityTooLarge:
+        raise
+    except Exception as exc:
+        logger.warning("Document conversion failed: %s (%s)", conversion, type(exc).__name__)
         return error_response("The document could not be converted. It may be damaged or unsupported.", 422)
 
 

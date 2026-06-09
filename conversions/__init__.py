@@ -1,3 +1,4 @@
-# Import all converters to register them with the factory
-from conversions.image_converter import *
-from conversions.document_converter import *
+from conversions import document_converter, image_converter
+
+
+__all__ = ("document_converter", "image_converter")

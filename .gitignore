@@ -16,8 +16,6 @@ Thumbs.db
 *.iml
 *.ipr
 *.iws
-# Upload directory (optional)
-uploads/*
 uploads/
 .env
 .env.*
@@ -31,3 +29,4 @@ pip-log.txt
 pip-delete-this-directory.txt
 # Specific PyCharm files to ignore
 .pytest_cache/
+.ruff_cache/

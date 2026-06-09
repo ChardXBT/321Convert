@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 from docx import Document
 from docxcompose.composer import Composer
+from openpyxl import load_workbook
 from pypdf import PdfReader
 from xhtml2pdf import pisa
 
@@ -14,6 +15,7 @@ from core.converter_factory import ConverterFactory
 
 MAX_PDF_PAGES = 150
 MAX_SPREADSHEET_CELLS = 500_000
+FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r", "\n")
 
 
 def html_to_pdf(html_input, output_path=None, **_kwargs):
@@ -30,6 +32,15 @@ def html_to_pdf(html_input, output_path=None, **_kwargs):
 
 
 def read_spreadsheet(excel_path, sheet_name=None):
+    workbook = load_workbook(excel_path, read_only=True, data_only=True, keep_links=False)
+    try:
+        if sheet_name and sheet_name not in workbook.sheetnames:
+            raise ValueError("The requested sheet does not exist.")
+        sheet = workbook[sheet_name] if sheet_name else workbook.active
+        if sheet.max_row * sheet.max_column > MAX_SPREADSHEET_CELLS:
+            raise ValueError("The spreadsheet contains too many cells.")
+    finally:
+        workbook.close()
     frame = pd.read_excel(excel_path, sheet_name=sheet_name) if sheet_name else pd.read_excel(excel_path)
     if frame.size > MAX_SPREADSHEET_CELLS:
         raise ValueError("The spreadsheet contains too many cells.")
@@ -89,8 +100,15 @@ def pdf_to_docx(pdf_path, **kwargs):
 def create_csv_from_excel(excel_path, **kwargs):
     output_path = kwargs.get("output_path")
     frame = read_spreadsheet(excel_path, kwargs.get("sheet_name"))
+    frame = frame.map(neutralize_formula)
     frame.to_csv(output_path, index=False, encoding="utf-8")
     return output_path
+
+
+def neutralize_formula(value):
+    if isinstance(value, str) and value.startswith(FORMULA_PREFIXES):
+        return f"'{value}"
+    return value
 
 
 def text_to_html(text_path, **kwargs):

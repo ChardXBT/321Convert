@@ -50,9 +50,9 @@ Useful environment controls:
 | `MAX_UPLOAD_BYTES` | 26214400 | Maximum request size |
 | `MAX_OUTPUT_BYTES` | 78643200 | Maximum returned file size |
 | `MAX_ARCHIVE_BYTES` | 104857600 | Maximum expanded Office archive size |
-| `RATE_LIMIT_REQUESTS` | 20 | Requests allowed per window and worker |
+| `RATE_LIMIT_REQUESTS` | 20 | Requests allowed per window |
 | `RATE_LIMIT_WINDOW` | 600 | Rate-limit window in seconds |
-| `TRUST_PROXY` | true | Trust one Render proxy hop |
+| `TRUST_PROXY` | false locally, true on Render | Trust one known proxy hop |
 
 ## License
 
