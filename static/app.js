@@ -113,7 +113,16 @@ const storedTheme = localStorage.getItem("theme");
 if (storedTheme === "dark" || (!storedTheme && matchMedia("(prefers-color-scheme: dark)").matches)) {
   document.body.classList.add("dark");
 }
+
+function syncThemeToggle() {
+  const dark = document.body.classList.contains("dark");
+  themeToggle.setAttribute("aria-pressed", dark.toString());
+  themeToggle.setAttribute("aria-label", dark ? "Switch to light theme" : "Switch to dark theme");
+}
+
+syncThemeToggle();
 themeToggle.addEventListener("click", () => {
   document.body.classList.toggle("dark");
   localStorage.setItem("theme", document.body.classList.contains("dark") ? "dark" : "light");
+  syncThemeToggle();
 });

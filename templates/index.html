@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Private, temporary image and document conversion.">
     <title>321Convert | Private file converter</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260609-2') }}">
-    <script src="{{ url_for('static', filename='app.js', v='20260609-2') }}" defer></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260609-3') }}">
+    <script src="{{ url_for('static', filename='app.js', v='20260609-3') }}" defer></script>
 </head>
 <body>
     <header class="site-header">
@@ -15,18 +15,22 @@
             <span>Convert</span>
         </a>
         <div class="header-actions">
-            <span class="privacy-status"><span aria-hidden="true"></span>Private processing</span>
-            <button id="themeToggle" class="theme-button" type="button" aria-label="Switch color theme">Appearance</button>
+            <span class="privacy-status"><span aria-hidden="true"></span>Temporary processing</span>
+            <button id="themeToggle" class="theme-toggle" type="button" aria-label="Switch to dark theme" aria-pressed="false">
+                <span class="theme-half theme-light" aria-hidden="true"></span>
+                <span class="theme-half theme-dark" aria-hidden="true"></span>
+                <span class="theme-indicator" aria-hidden="true"></span>
+            </button>
         </div>
     </header>
 
     <main>
         <section class="intro">
-            <p class="overline">Private file conversion</p>
-            <h1>A better way to convert files.</h1>
-            <p class="intro-copy">Fast, focused conversion for images and documents. Your files are processed temporarily and never stored.</p>
+            <p class="overline">Instant and safe</p>
+            <h1>Convert files in seconds.</h1>
+            <p class="intro-copy">Fast, focused conversion for images and documents. Files are processed temporarily, delivered directly, and never permanently stored.</p>
             <dl class="privacy-details">
-                <div><dt>Storage</dt><dd>None</dd></div>
+                <div><dt>Storage</dt><dd>Temporary only</dd></div>
                 <div><dt>Public links</dt><dd>Never</dd></div>
                 <div><dt>File limit</dt><dd>{{ max_upload_mb }} MB</dd></div>
             </dl>
@@ -110,6 +114,6 @@
         </section>
     </main>
 
-    <footer><span>321Convert</span><span>Private by design.</span></footer>
+    <footer><span>321Convert</span><span>Instant and safe.</span></footer>
 </body>
 </html>
