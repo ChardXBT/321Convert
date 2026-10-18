@@ -18,6 +18,7 @@ from tests import samples
 def process_mode(monkeypatch):
     monkeypatch.setattr(config, "CONVERSION_ISOLATION", "process")
     yield
+    runner._stop_idle()
     for child in multiprocessing.active_children():
         child.kill()
         child.join(2)
@@ -42,10 +43,68 @@ def test_timeout_kills_child(process_mode, monkeypatch, tmp_path):
     source = _png(tmp_path)
     with pytest.raises(ConversionTimeout):
         runner.run("image", "jpg", source, tmp_path / "out.jpg", {})
+
+    # One pre-spawned idle worker may legitimately remain on spawn platforms.
+    def survivors():
+        idle_proc = runner._IDLE.proc if runner._IDLE else None
+        return [child for child in multiprocessing.active_children() if child is not idle_proc]
+
     deadline = time.monotonic() + 10
-    while multiprocessing.active_children() and time.monotonic() < deadline:
+    while survivors() and time.monotonic() < deadline:
         time.sleep(0.05)
-    assert not multiprocessing.active_children()
+    assert not survivors()
+    monkeypatch.setattr(config, "CONVERSION_TIMEOUT", 30.0)
+    result = runner.run("image", "jpg", _png(tmp_path), tmp_path / "out2.jpg", {})
+    assert result.extension == "jpg"
+
+
+def _spawn_platform() -> bool:
+    return runner._mp_context()._name == "spawn"
+
+
+def _wait_for_idle(timeout=15.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if runner._IDLE is not None and runner._IDLE.proc.is_alive():
+            return runner._IDLE
+        time.sleep(0.1)
+    return None
+
+
+def test_idle_worker_spawned(process_mode, tmp_path):
+    result = runner.run("image", "jpg", _png(tmp_path), tmp_path / "out.jpg", {})
+    assert result.extension == "jpg"
+    if _spawn_platform():
+        assert _wait_for_idle() is not None
+    else:
+        assert runner._IDLE is None
+
+
+def test_idle_worker_warm_conversion(process_mode, tmp_path):
+    if not _spawn_platform():
+        pytest.skip("pre-spawned idle workers only exist on spawn platforms")
+    runner.run("image", "jpg", _png(tmp_path), tmp_path / "a.jpg", {})
+    assert _wait_for_idle() is not None
+    time.sleep(1.0)  # let the worker reach its blocking recv()
+    start = time.monotonic()
+    result = runner.run("image", "jpg", _png(tmp_path), tmp_path / "b.jpg", {})
+    elapsed = time.monotonic() - start
+    assert result.extension == "jpg"
+    assert elapsed < 1.0
+
+
+def test_idle_worker_exits_on_closed_pipe(process_mode):
+    if not _spawn_platform():
+        pytest.skip("pre-spawned idle workers only exist on spawn platforms")
+    runner._replenish_idle()
+    worker = _wait_for_idle()
+    assert worker is not None
+    with runner._IDLE_LOCK:
+        runner._IDLE = None
+    runner._close_worker(worker)
+    worker.proc.join(5)
+    assert not worker.proc.is_alive()
+    assert worker.proc.exitcode == 0
 
 
 def test_child_conversion_error_surfaces(process_mode, tmp_path):

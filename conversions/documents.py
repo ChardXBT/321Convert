@@ -29,15 +29,29 @@ _HTML_PAGE_CSS = (
     "th{background:#f3f3f3}"
     "img{max-width:100%}pre{white-space:pre-wrap}"
     "blockquote{border-left:3px solid #ddd;margin-left:0;padding-left:12px;color:#555}"
+    ".docx-header,.docx-footer{color:#777;font-size:.85em;white-space:pre-wrap}"
 )
 
 _IMAGE_SKIP_NOTE = "Some images could not be converted."
+
+_HIGHLIGHT_CSS = {
+    "YELLOW": "#ffff00",
+    "BRIGHT_GREEN": "#00ff00",
+    "TURQUOISE": "#00ffff",
+    "PINK": "#ff00ff",
+    "GRAY_25": "#c0c0c0",
+}
+_LIST_TYPES = {"lowerLetter": "a", "upperLetter": "A", "lowerRoman": "i", "upperRoman": "I"}
 
 
 def _run_html(run) -> str:
     text = html.escape(run.text or "").replace("\n", "<br>")
     if not text:
         return ""
+    if run.font.superscript:
+        text = f"<sup>{text}</sup>"
+    if run.font.subscript:
+        text = f"<sub>{text}</sub>"
     if run.bold:
         text = f"<b>{text}</b>"
     if run.italic:
@@ -46,11 +60,91 @@ def _run_html(run) -> str:
         text = f"<u>{text}</u>"
     if run.font.strike:
         text = f"<s>{text}</s>"
+    styles = []
+    if run.font.size:
+        styles.append(f"font-size:{run.font.size.pt:g}pt")
+    try:
+        rgb = run.font.color.rgb
+    except Exception:
+        rgb = None
+    if rgb:
+        styles.append(f"color:#{str(rgb).lower()}")
+    try:
+        highlight = run.font.highlight_color
+    except Exception:
+        highlight = None
+    background = _HIGHLIGHT_CSS.get(getattr(highlight, "name", ""), "") if highlight else ""
+    if background:
+        styles.append(f"background:{background}")
+    if run.font.all_caps:
+        styles.append("text-transform:uppercase")
+    if run.font.small_caps:
+        styles.append("font-variant:small-caps")
+    if styles:
+        text = f'<span style="{";".join(styles)}">{text}</span>'
     return text
+
+
+def _paragraph_style(paragraph) -> str:
+    styles = []
+    try:
+        alignment = paragraph.alignment
+    except Exception:
+        alignment = None
+    align = {
+        "LEFT": "left",
+        "CENTER": "center",
+        "RIGHT": "right",
+        "JUSTIFY": "justify",
+    }.get(getattr(alignment, "name", ""))
+    if align:
+        styles.append(f"text-align:{align}")
+    fmt = paragraph.paragraph_format
+    for attribute, css_prop in (
+        ("left_indent", "margin-left"),
+        ("right_indent", "margin-right"),
+        ("first_line_indent", "text-indent"),
+        ("space_before", "margin-top"),
+        ("space_after", "margin-bottom"),
+    ):
+        try:
+            value = getattr(fmt, attribute)
+        except Exception:
+            value = None
+        if value:
+            styles.append(f"{css_prop}:{value.pt:g}pt")
+    spacing = getattr(fmt, "line_spacing", None)
+    if isinstance(spacing, float) and spacing != 1.0:
+        styles.append(f"line-height:{spacing:g}")
+    return ";".join(styles)
+
+
+def _attr(style: str) -> str:
+    return f' style="{style}"' if style else ""
 
 
 def _link_ok(url: str) -> bool:
     return url.lower().startswith(("http://", "https://", "mailto:"))
+
+
+def _drawing_sizes(run) -> dict:
+    """Map blip relationship ids to their ``wp:extent`` in points."""
+    sizes = {}
+    for drawing in run._r.xpath(".//w:drawing"):
+        extent = drawing.xpath(".//wp:extent")
+        if not extent:
+            continue
+        try:
+            width = int(extent[0].get("cx")) / 12700
+            height = int(extent[0].get("cy")) / 12700
+        except (TypeError, ValueError):
+            continue
+        if width > 468:
+            height *= 468 / width
+            width = 468
+        for rel in drawing.xpath(".//a:blip/@r:embed"):
+            sizes[str(rel)] = (width, height)
+    return sizes
 
 
 def _image_embed(run, document, budget, notes) -> str:
@@ -58,6 +152,7 @@ def _image_embed(run, document, budget, notes) -> str:
     Image = conversions._pillow()
 
     out = []
+    sizes = _drawing_sizes(run)
     rels = run._r.xpath(".//a:blip/@r:embed")
     for rel_id in rels:
         if budget[0] <= 0:
@@ -85,7 +180,9 @@ def _image_embed(run, document, budget, notes) -> str:
             continue
         budget[0] -= 1
         encoded = base64.b64encode(payload).decode("ascii")
-        out.append(f'<img src="data:{mime};base64,{encoded}" style="max-width:100%">')
+        size = sizes.get(str(rel_id))
+        dims = f' width="{size[0]:.0f}" height="{size[1]:.0f}"' if size else ""
+        out.append(f'<img src="data:{mime};base64,{encoded}"{dims} style="max-width:100%">')
     return "".join(out)
 
 
@@ -105,7 +202,32 @@ def _inline_html(item, document, budget, notes) -> str:
     return "".join(parts)
 
 
-def _table_html(table) -> list[list[str]]:
+def _cell_style(cell) -> str:
+    from docx.oxml.ns import qn
+
+    styles = []
+    try:
+        width = cell.width
+    except Exception:
+        width = None
+    if width:
+        styles.append(f"width:{width.pt:g}pt")
+    tc_pr = cell._tc.tcPr
+    if tc_pr is not None:
+        shd = tc_pr.find(qn("w:shd"))
+        if shd is not None:
+            fill = shd.get(qn("w:fill"))
+            if fill and fill.lower() != "auto":
+                styles.append(f"background:#{fill.lstrip('#').lower()}")
+        v_align = tc_pr.find(qn("w:vAlign"))
+        if v_align is not None:
+            value = v_align.get(qn("w:val"))
+            if value in {"top", "center", "bottom"}:
+                styles.append(f"vertical-align:{value}")
+    return ";".join(styles)
+
+
+def _table_html(table) -> list[list[dict]]:
     rows = []
     for row in table.rows:
         cells = []
@@ -116,15 +238,77 @@ def _table_html(table) -> list[list[str]]:
                 colspan += 1
                 continue
             if colspan:
-                cells[-1] = (cells[-1][0], colspan)
+                cells[-1]["span"] = colspan
             previous_tc = cell._tc
             colspan = 1
             text = "<br>".join(html.escape(paragraph.text) for paragraph in cell.paragraphs)
-            cells.append((text, 1))
+            cells.append(
+                {
+                    "text": text,
+                    "span": 1,
+                    "rowspan": 1,
+                    "skip": False,
+                    "style": _cell_style(cell),
+                    "tc": cell._tc,
+                }
+            )
         if colspan:
-            cells[-1] = (cells[-1][0], colspan)
+            cells[-1]["span"] = colspan
         rows.append(cells)
+    # Vertically merged cells resurface the same <w:tc> in later rows:
+    # fold them into a rowspan on the origin cell instead.
+    for index in range(1, len(rows)):
+        for cell in rows[index]:
+            origin = None
+            for above in range(index - 1, -1, -1):
+                for candidate in rows[above]:
+                    if not candidate["skip"] and candidate["tc"] is cell["tc"]:
+                        origin = candidate
+                if origin is not None:
+                    break
+            if origin is not None:
+                origin["rowspan"] += 1
+                cell["skip"] = True
     return rows
+
+
+def _num_list_kind(document, paragraph, style_name: str):
+    """Return (tag, ol type) for a numbered/bulleted paragraph, else None."""
+    from docx.oxml.ns import qn
+
+    fallback = ("ol", "1") if "Number" in style_name else ("ul", "")
+    p_pr = paragraph._p.pPr
+    num_pr = p_pr.numPr if p_pr is not None else None
+    if num_pr is None:
+        return fallback if "List" in style_name else None
+    try:
+        num_id = num_pr.numId.val
+        ilvl = num_pr.ilvl.val if num_pr.ilvl is not None else 0
+    except Exception:
+        return fallback
+    if num_id is None:
+        return fallback
+    fmt = ""
+    try:
+        numbering = document.part.numbering_part.element
+        abstract_id = None
+        for num in numbering.xpath(f'./w:num[@w:numId="{num_id}"]/w:abstractNumId'):
+            abstract_id = num.get(qn("w:val"))
+        if abstract_id is not None:
+            levels = numbering.xpath(
+                f'./w:abstractNum[@w:abstractNumId="{abstract_id}"]/w:lvl[@w:ilvl="{ilvl}"]'
+            ) or numbering.xpath(f'./w:abstractNum[@w:abstractNumId="{abstract_id}"]/w:lvl[@w:ilvl="0"]')
+            if levels:
+                fmt_nodes = levels[0].xpath("./w:numFmt")
+                if fmt_nodes:
+                    fmt = fmt_nodes[0].get(qn("w:val"), "")
+    except Exception:
+        return fallback
+    if fmt == "bullet":
+        return ("ul", "")
+    if fmt:
+        return ("ol", _LIST_TYPES.get(fmt, "1"))
+    return fallback
 
 
 def _docx_blocks(document, notes, *, for_pdf=False):
@@ -134,31 +318,36 @@ def _docx_blocks(document, notes, *, for_pdf=False):
 
     blocks = []
     budget = [config.MAX_EMBEDDED_IMAGES]
-    list_state = None  # None | "ul" | "ol"
+    list_state = None  # None | (tag, type)
 
     def close_list():
         nonlocal list_state
         if list_state:
-            blocks.append({"kind": "list_close", "html": f"</{list_state}>", "text": None})
+            blocks.append({"kind": "list_close", "html": f"</{list_state[0]}>", "text": None})
         list_state = None
 
     for element in document.element.body.iterchildren():
         if element.tag == qn("w:tbl"):
             close_list()
             rows = _table_html(Table(element, document))
-            table_html = ["<table>"]
+            table_html = ['<table style="border-collapse:collapse;width:100%">']
             for cells in rows:
                 table_html.append("<tr>")
-                for text, span in cells:
-                    attr = f' colspan="{span}"' if span > 1 else ""
-                    table_html.append(f"<td{attr}>{text}</td>")
+                for cell in cells:
+                    if cell["skip"]:
+                        continue
+                    attr = f' colspan="{cell["span"]}"' if cell["span"] > 1 else ""
+                    if cell["rowspan"] > 1:
+                        attr += f' rowspan="{cell["rowspan"]}"'
+                    attr += _attr(cell["style"])
+                    table_html.append(f"<td{attr}>{cell['text']}</td>")
                 table_html.append("</tr>")
             table_html.append("</table>")
             blocks.append(
                 {
                     "kind": "table",
                     "html": "".join(table_html),
-                    "text": ["\t".join(c[0] for c in cells) for cells in rows],
+                    "text": ["\t".join(c["text"] for c in cells if not c["skip"]) for cells in rows],
                 }
             )
             continue
@@ -173,6 +362,7 @@ def _docx_blocks(document, notes, *, for_pdf=False):
             level = 1
         elif style_name == "Subtitle":
             level = 2
+        para_attr = _attr(_paragraph_style(paragraph))
 
         inner = "".join(
             _inline_html(item, document, budget, notes) for item in paragraph.iter_inner_content()
@@ -180,27 +370,41 @@ def _docx_blocks(document, notes, *, for_pdf=False):
         # A page break run splits the paragraph in place.
         pieces = inner.split("\x00PAGEBREAK\x00")
 
-        is_list = (
-            paragraph._p.pPr is not None and paragraph._p.pPr.numPr is not None
-        ) or "List" in style_name
-        ordered = "Number" in style_name
+        list_kind = None if level else _num_list_kind(document, paragraph, style_name)
 
         for position, piece in enumerate(pieces):
             if piece or position == 0:
                 if level:
                     close_list()
                     tag = f"h{level}"
-                    blocks.append({"kind": "para", "html": f"<{tag}>{piece}</{tag}>", "text": paragraph.text})
-                elif is_list:
-                    wanted = "ol" if ordered else "ul"
-                    if list_state != wanted:
+                    blocks.append(
+                        {
+                            "kind": "para",
+                            "html": f"<{tag}{para_attr}>{piece}</{tag}>",
+                            "text": paragraph.text,
+                        }
+                    )
+                elif list_kind:
+                    if list_state != list_kind:
                         close_list()
-                        blocks.append({"kind": "list_open", "html": wanted, "text": None})
-                        list_state = wanted
-                    blocks.append({"kind": "item", "html": f"<li>{piece}</li>", "text": paragraph.text})
+                        blocks.append({"kind": "list_open", "html": list_kind, "text": None})
+                        list_state = list_kind
+                    blocks.append(
+                        {
+                            "kind": "item",
+                            "html": f"<li{para_attr}>{piece}</li>",
+                            "text": paragraph.text,
+                        }
+                    )
                 elif piece:
                     close_list()
-                    blocks.append({"kind": "para", "html": f"<p>{piece}</p>", "text": paragraph.text})
+                    blocks.append(
+                        {
+                            "kind": "para",
+                            "html": f"<p{para_attr}>{piece}</p>",
+                            "text": paragraph.text,
+                        }
+                    )
             if position < len(pieces) - 1:
                 close_list()
                 blocks.append({"kind": "pagebreak", "html": "", "text": None})
@@ -210,7 +414,9 @@ def _docx_blocks(document, notes, *, for_pdf=False):
     text_parts = []
     for block in blocks:
         if block["kind"] == "list_open":
-            html_parts.append(f"<{block['html']}>")
+            tag, list_type = block["html"]
+            type_attr = f' type="{list_type}"' if tag == "ol" and list_type else ""
+            html_parts.append(f"<{tag}{type_attr}>")
             continue
         if block["kind"] == "list_close":
             html_parts.append(block["html"])
@@ -228,6 +434,43 @@ def _docx_blocks(document, notes, *, for_pdf=False):
             text_parts.append(block["text"].strip())
 
     return "\n".join(html_parts), "\n\n".join(part for part in text_parts if part is not None)
+
+
+def _page_css(document):
+    """First-section page setup -> (page_size, margins) in points, else (None, None)."""
+    try:
+        section = document.sections[0]
+        width, height = section.page_width.pt, section.page_height.pt
+        if not width or not height:
+            return None, None
+        margins = (
+            section.top_margin.pt,
+            section.right_margin.pt,
+            section.bottom_margin.pt,
+            section.left_margin.pt,
+        )
+        return (width, height), margins
+    except Exception:
+        return None, None
+
+
+def _header_footer(document) -> tuple[str, str]:
+    """First-section header/footer text, wrapped in muted divs (once per doc)."""
+    top, bottom = "", ""
+    try:
+        section = document.sections[0]
+        for container, name in ((section.header, "docx-header"), (section.footer, "docx-footer")):
+            text = "\n".join(
+                paragraph.text for paragraph in container.paragraphs if paragraph.text.strip()
+            ).strip()
+            div = f'<div class="{name}">{html.escape(text)}</div>' if text else ""
+            if name == "docx-header":
+                top = div
+            else:
+                bottom = div
+    except Exception:  # noqa: S110 -- headers are best-effort
+        pass
+    return top, bottom
 
 
 def _document(path: Path):
@@ -259,6 +502,8 @@ def docx_to_html(input_path: Path, output_path: Path, options: dict) -> Conversi
     notes = []
     document = _document(input_path)
     body, _text = _docx_blocks(document, notes)
+    top, bottom = _header_footer(document)
+    body = top + body + bottom
     title = _docx_title(document, options.get("_stem", "Document") or "Document")
     output_path.write_text(_standalone(body, title), encoding="utf-8")
     return ConversionResult(str(output_path), "html", notes)
@@ -278,7 +523,16 @@ def docx_to_pdf(input_path: Path, output_path: Path, options: dict) -> Conversio
     notes = []
     document = _document(input_path)
     body, _text = _docx_blocks(document, notes, for_pdf=True)
-    pdf_render.render_pdf(body, output_path, title=_docx_title(document, options.get("_stem", "")))
+    top, bottom = _header_footer(document)
+    body = top + body + bottom
+    page_size, margins = _page_css(document)
+    pdf_render.render_pdf(
+        body,
+        output_path,
+        title=_docx_title(document, options.get("_stem", "")),
+        page_size=page_size,
+        margins=margins,
+    )
     return ConversionResult(str(output_path), "pdf", notes)
 
 
@@ -296,8 +550,9 @@ def html_to_pdf(input_path: Path, output_path: Path, options: dict) -> Conversio
     if len(raw.encode("utf-8")) > config.MAX_HTML_BYTES:
         raise ConversionError(f"HTML files are limited to {config.MAX_HTML_BYTES // (1024 * 1024)} MB.")
     title = _extract_title(raw)
+    extra_css = pdf_render.sanitize_css(pdf_render.extract_styles(raw))
     body = pdf_render.sanitize_html(raw)
-    pdf_render.render_pdf(body, output_path, title=title)
+    pdf_render.render_pdf(body, output_path, title=title, extra_css=extra_css)
     return ConversionResult(str(output_path), "pdf", [])
 
 

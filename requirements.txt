@@ -1,5 +1,5 @@
 Flask>=3.1.1,<4
-gunicorn>=23.0.0,<24
+gunicorn>=26.2.0,<27
 pillow>=12.2.0,<13
 pillow-heif>=1.1.0,<2
 pypdfium2>=5.0.0,<6
@@ -9,3 +9,5 @@ python-docx>=1.1.2,<2
 pypdf[crypto]>=5.4.0,<7
 nh3>=0.2.18,<1
 Markdown>=3.7,<4
+rapidocr>=3.10.0,<4
+onnxruntime>=1.20,<2

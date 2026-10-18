@@ -13,7 +13,7 @@ ANIMATED_OUTPUTS = {"gif", "webp", "tiff", "pdf"}
 _ALPHA_MODES = {"RGBA", "LA", "PA", "RGBa"}
 _NON_RGB_MODES = {"CMYK", "YCbCr", "LAB", "HSV"}
 _ICC_SOURCE_MODES = {"RGB", "RGBA", "L", "LA"}
-_ICC_OUTPUTS = {"jpg", "png", "webp", "avif", "tiff"}
+_ICC_OUTPUTS = {"jpg", "png", "webp", "avif", "tiff", "heic"}
 
 _UNREADABLE = "The image could not be read. It may be damaged or not a supported image."
 
@@ -66,7 +66,7 @@ def _normalise(frame, output_ext, notes):
         elif mode in {"I", "F"}:
             frame = _to_8bit_l(frame)
         # I;16 is kept: PNG supports it natively.
-    elif output_ext in {"webp", "avif"}:
+    elif output_ext in {"webp", "avif", "heic"}:
         wanted = "RGBA" if has_alpha else "RGB"
         if mode != wanted:
             frame = frame.convert(wanted)
@@ -225,7 +225,7 @@ def convert(input_path: Path, output_path: Path, options: dict) -> ConversionRes
                 save_kwargs.update(quality=quality, optimize=True)
             elif ext == "webp":
                 save_kwargs.update(quality=quality, method=4)
-            elif ext == "avif":
+            elif ext in {"avif", "heic"}:
                 save_kwargs["quality"] = quality
             elif ext == "png":
                 save_kwargs.update(optimize=False, compress_level=6)
@@ -249,4 +249,5 @@ def _pillow_format(ext: str) -> str:
         "bmp": "BMP",
         "tiff": "TIFF",
         "avif": "AVIF",
+        "heic": "HEIF",
     }[ext]

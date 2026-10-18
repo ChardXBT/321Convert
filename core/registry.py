@@ -79,6 +79,7 @@ OUTPUT_FORMATS = {
     "csv": OutputFormat("csv", "CSV", MIMETYPES["csv"]),
     "xlsx": OutputFormat("xlsx", "XLSX", MIMETYPES["xlsx"]),
     "html": OutputFormat("html", "HTML", MIMETYPES["html"]),
+    "heic": OutputFormat("heic", "HEIC", MIMETYPES["heic"]),
     "zip": OutputFormat("zip", "ZIP", MIMETYPES["zip"]),
 }
 
@@ -91,7 +92,7 @@ FAMILIES = (
         "image",
         "Image",
         IMAGE_EXTENSIONS,
-        ("jpg", "png", "webp", "gif", "bmp", "tiff", "avif", "ico", "pdf"),
+        ("jpg", "png", "webp", "gif", "bmp", "tiff", "avif", "heic", "ico", "pdf", "txt"),
     ),
     Family("pdf", "PDF", frozenset({"pdf"}), ("docx", "txt", "png", "jpg")),
     Family("spreadsheet", "Spreadsheet", frozenset({"xlsx"}), ("csv", "pdf")),
@@ -114,7 +115,7 @@ OPTIONS = (
         minimum=1,
         maximum=100,
         help="Higher keeps more detail and makes a larger file.",
-        outputs=frozenset({"jpg", "webp", "avif"}),
+        outputs=frozenset({"jpg", "webp", "avif", "heic"}),
     ),
     Option(
         id="max_dimension",

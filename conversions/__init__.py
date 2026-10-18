@@ -7,7 +7,7 @@ loads ahead of time via ``conversions.warm``.
 import warnings
 
 # Modules are import-light, so importing them here is cheap.
-from conversions import documents, images, pdf, spreadsheets
+from conversions import documents, images, ocr, pdf, spreadsheets
 from core import config
 
 CONVERTERS = {
@@ -18,8 +18,10 @@ CONVERTERS = {
     ("image", "bmp"): images.convert,
     ("image", "tiff"): images.convert,
     ("image", "avif"): images.convert,
+    ("image", "heic"): images.convert,
     ("image", "ico"): images.convert,
     ("image", "pdf"): images.convert,
+    ("image", "txt"): ocr.image_to_text,
     ("pdf", "docx"): pdf.to_docx,
     ("pdf", "txt"): pdf.to_txt,
     ("pdf", "png"): pdf.to_images,
