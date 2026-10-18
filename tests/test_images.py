@@ -34,7 +34,7 @@ INPUTS = {
     "ico": ("in.ico", samples.ico),
 }
 
-OUTPUTS = ["jpg", "png", "webp", "gif", "bmp", "tiff", "avif", "heic", "ico", "pdf"]
+OUTPUTS = ["jpg", "png", "webp", "gif", "bmp", "tiff", "avif", "ico", "pdf"]
 
 EXPECTED_FORMAT = {
     "jpg": "JPEG",
@@ -44,7 +44,6 @@ EXPECTED_FORMAT = {
     "bmp": "BMP",
     "tiff": "TIFF",
     "avif": "AVIF",
-    "heic": "HEIF",
     "ico": "ICO",
 }
 
@@ -164,50 +163,6 @@ def test_max_dimension_larger_than_image_no_resize(client):
 def test_max_dimension_below_minimum_rejected(client):
     response = samples.convert(client, "x.png", samples.png(), "png", max_dimension=5)
     assert response.status_code == 400
-
-
-def test_heic_output_rgb_and_rgba(client):
-    response = samples.convert(client, "a.png", samples.png(size=(32, 24)), "heic")
-    assert response.status_code == 200
-    assert response.mimetype == "image/heif"
-    image = Image.open(io.BytesIO(response.data))
-    image.load()
-    assert image.format == "HEIF"
-    assert image.size == (32, 24)
-    assert image.mode == "RGB"
-
-    rgba = io.BytesIO()
-    Image.new("RGBA", (16, 16), (0, 100, 200, 128)).save(rgba, "PNG")
-    rgba.seek(0)
-    response = samples.convert(client, "a.png", rgba, "heic")
-    assert response.status_code == 200
-    image = Image.open(io.BytesIO(response.data))
-    image.load()
-    assert image.mode == "RGBA"
-
-
-def test_heic_quality_changes_size(client):
-    noisy = io.BytesIO()
-    image = Image.new("RGB", (64, 64))
-    image.putdata(
-        [
-            ((x * 37 + y * 11) % 256, (x * 13 + y * 53) % 256, (x * y) % 256)
-            for y in range(64)
-            for x in range(64)
-        ]
-    )
-    image.save(noisy, "PNG")
-    noisy.seek(0)
-    small = samples.convert(client, "q.png", io.BytesIO(noisy.getvalue()), "heic", quality=20)
-    big = samples.convert(client, "q.png", noisy, "heic", quality=95)
-    assert small.status_code == 200 and big.status_code == 200
-    assert len(small.data) != len(big.data)
-
-
-def test_heic_to_heic_uses_converted_name(client):
-    response = samples.convert(client, "photo.heic", samples.heic(), "heic")
-    assert response.status_code == 200
-    assert "photo-converted" in (response.headers.get("Content-Disposition") or "")
 
 
 def test_ico_downscale_and_sizes(client):

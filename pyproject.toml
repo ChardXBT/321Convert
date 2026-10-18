@@ -10,8 +10,5 @@ select = ["E", "F", "W", "I", "B", "UP", "S"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = [
-    "e2e: browser end-to-end tests (opt in with -m e2e)",
-    "ocr: exercises the bundled OCR engine (runs in the default suite)",
-]
+markers = ["e2e: browser end-to-end tests (opt in with -m e2e)"]
 addopts = "-m 'not e2e'"

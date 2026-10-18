@@ -54,7 +54,7 @@ def test_user_password_pdf_rejected(client):
 def test_blank_pdf_notes_no_text(client):
     response = samples.convert(client, "blank.pdf", samples.pdf_blank(), "txt")
     assert response.status_code == 200
-    assert any("No text could be recognised" in note for note in notes_of(response))
+    assert any("No selectable text" in note for note in notes_of(response))
 
 
 def test_pdf_single_page_png(client):
@@ -105,4 +105,4 @@ def test_pdf_page_limit(client, monkeypatch):
 def test_pdf_to_docx_notes_blank(client):
     response = samples.convert(client, "blank.pdf", samples.pdf_blank(), "docx")
     assert response.status_code == 200
-    assert any("No text could be recognised" in note for note in notes_of(response))
+    assert any("No selectable text" in note for note in notes_of(response))

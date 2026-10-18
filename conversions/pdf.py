@@ -3,7 +3,6 @@
 
 import math
 import re
-import time
 import zipfile
 from io import BytesIO
 from pathlib import Path
@@ -15,7 +14,7 @@ from core.runner import ConversionResult
 
 _IMAGE_FORMATS = ["JPEG", "PNG", "TIFF", "JPEG2000", "BMP", "GIF", "WEBP"]
 
-_EMPTY_NOTE = "No text could be recognised on these pages."
+_EMPTY_NOTE = "No selectable text was found. Scanned PDFs need OCR, which is not available."
 
 
 def _open(path: Path):
@@ -52,71 +51,11 @@ def _page_text(page) -> str:
     return "\n".join(line.rstrip() for line in text.split("\n"))
 
 
-def _ocr_pages(pdf_path: Path, candidates: list[int], notes: list[str]) -> dict[int, str]:
-    """Render each candidate page with pypdfium2 and OCR it.
-
-    Bounded by ``config.OCR_MAX_PAGES`` and a wall-clock budget measured from
-    the first OCR attempt; pages beyond either limit are simply skipped.
-    """
-    if not candidates:
-        return {}
-    import pypdfium2 as pdfium
-
-    from conversions import ocr
-
-    results = {}
-    done = 0
-    stopped = len(candidates) > config.OCR_MAX_PAGES
-    try:
-        pdf = pdfium.PdfDocument(str(pdf_path))
-    except pdfium.PdfiumError:
-        return results
-    try:
-        started = time.monotonic()
-        last_duration = 0.0
-        for index in candidates[: config.OCR_MAX_PAGES]:
-            elapsed = time.monotonic() - started
-            # Predictive: don't start a page that probably would not finish.
-            if elapsed > config.OCR_TIME_BUDGET or (
-                done and elapsed + last_duration > config.OCR_TIME_BUDGET
-            ):
-                stopped = True
-                break
-            page = pdf[index]
-            try:
-                page_start = time.monotonic()
-                image = _render_page(page, scale_cap=config.OCR_RENDER_SCALE)
-                text = ocr.recognize(image)
-                last_duration = time.monotonic() - page_start
-            finally:
-                page.close()
-            done += 1
-            if text.strip():
-                results[index] = text
-    finally:
-        pdf.close()
-    if stopped:
-        notes.append(f"OCR stopped after {done} page(s) to stay within the time limit.")
-    if results:
-        notes.append(f"Text on {done} page(s) was recognised with OCR; check it for errors.")
-    return results
-
-
-def _scanned_indices(page_texts: list[str]) -> list[int]:
-    return [
-        index
-        for index, text in enumerate(page_texts)
-        if len("".join(text.split())) < config.OCR_MIN_TEXT_CHARS
-    ]
-
-
 def to_txt(input_path: Path, output_path: Path, options: dict) -> ConversionResult:
     reader = _open(input_path)
     pages = [_page_text(page) for page in reader.pages]
-    notes = []
-    for index, text in _ocr_pages(input_path, _scanned_indices(pages), notes).items():
-        pages[index] = text
     text = "\n\n".join(pages).strip()
+    notes = []
     if not text:
         notes.append(_EMPTY_NOTE)
     output_path.write_text(text, encoding="utf-8")
@@ -180,13 +119,12 @@ def to_docx(input_path: Path, output_path: Path, options: dict) -> ConversionRes
         pass
 
     notes = []
-    page_texts = [_page_text(page) for page in reader.pages]
-    for index, text in _ocr_pages(input_path, _scanned_indices(page_texts), notes).items():
-        page_texts[index] = text
-    any_text = any(text.strip() for text in page_texts)
+    any_text = False
     image_budget = config.MAX_EMBEDDED_IMAGES
     for index, page in enumerate(reader.pages):
-        text = page_texts[index]
+        text = _page_text(page)
+        if text.strip():
+            any_text = True
         for paragraph in _paragraphs(text):
             document.add_paragraph(paragraph)
         image_budget -= _pdf_page_images(page, document, image_budget)
@@ -201,14 +139,14 @@ def to_docx(input_path: Path, output_path: Path, options: dict) -> ConversionRes
     return ConversionResult(str(output_path), "docx", notes)
 
 
-def _render_page(page, scale_cap=None):
+def _render_page(page):
     """Render one page, capped at 4000 px on the long side and the global
     image-pixel budget."""
     width, height = page.get_size()
     if not width or not height or width * height <= 0:
         raise ConversionError("The PDF has an invalid page size.")
     scale = min(
-        scale_cap if scale_cap is not None else config.PDF_RENDER_SCALE,
+        config.PDF_RENDER_SCALE,
         4000 / max(width, height),
         math.sqrt(config.MAX_IMAGE_PIXELS / (width * height)),
     )

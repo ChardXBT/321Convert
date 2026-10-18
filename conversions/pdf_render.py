@@ -9,7 +9,6 @@ the same DejaVu Sans family rather than a font we do not ship.
 import dataclasses
 import html
 import logging
-import re
 from pathlib import Path
 
 import nh3
@@ -33,19 +32,8 @@ def _policy() -> ResourceAccessPolicy:
     return dataclasses.replace(_BASE_POLICY, max_render_seconds=max(config.CONVERSION_TIMEOUT - 10, 5))
 
 
-def _base_css(
-    landscape: bool,
-    page_size: tuple[float, float] | None = None,
-    margins: tuple[float, float, float, float] | None = None,
-) -> str:
-    if page_size:
-        size = f"{page_size[0]:g}pt {page_size[1]:g}pt"
-    else:
-        size = f"a4{' landscape' if landscape else ''}"
-    if margins:
-        margin = " ".join(f"{value:g}pt" for value in margins)
-    else:
-        margin = "1.8cm"
+def _base_css(landscape: bool) -> str:
+    orientation = " landscape" if landscape else ""
     return f"""
 @font-face {{ font-family: "DejaVu Sans"; src: url("{_FONT_URL}/DejaVuSans.ttf"); }}
 @font-face {{ font-family: "DejaVu Sans"; font-weight: bold;
@@ -54,12 +42,7 @@ def _base_css(
     src: url("{_FONT_URL}/DejaVuSans-Oblique.ttf"); }}
 @font-face {{ font-family: "DejaVu Sans"; font-weight: bold; font-style: italic;
     src: url("{_FONT_URL}/DejaVuSans-BoldOblique.ttf"); }}
-@font-face {{ font-family: "Droid Sans Fallback";
-    src: url("{_FONT_URL}/DroidSansFallbackFull.ttf"); }}
-@font-face {{ font-family: "Noto Sans KR"; src: url("{_FONT_URL}/NotoSansKR-Regular.ttf"); }}
-.x-cjk {{ font-family: "Droid Sans Fallback"; }}
-.x-hangul {{ font-family: "Noto Sans KR"; }}
-@page {{ size: {size}; margin: {margin}; }}
+@page {{ size: a4{orientation}; margin: 1.8cm; }}
 body {{ font-family: "DejaVu Sans"; font-size: 10.5pt; line-height: 1.45; color: #1a1a1a; }}
 h1 {{ font-size: 20pt; }} h2 {{ font-size: 16pt; }} h3 {{ font-size: 13.5pt; }} h4 {{ font-size: 12pt; }}
 p {{ margin: 0 0 7pt 0; }}
@@ -71,30 +54,7 @@ th {{ background: #eee; }}
 img {{ max-width: 100%; }}
 blockquote {{ border-left: 2pt solid #ccc; padding-left: 8pt; color: #444; }}
 hr {{ border: 0; border-top: 1px solid #bbb; }}
-.docx-header, .docx-footer {{ color: #777; font-size: 9pt; white-space: pre-wrap; }}
 """
-
-
-_CJK_RUN = re.compile(r"[　-ヿ㐀-䶿一-鿿豈-﫿＀-￯]+")
-_HANGUL_RUN = re.compile(r"[ᄀ-ᇿ㄰-㆏가-힯]+")
-
-
-def apply_script_fonts(body_html: str) -> str:
-    """Wrap Han/Kana/fullwidth runs in ``x-cjk`` spans and Hangul runs in
-    ``x-hangul`` spans so generated PDFs use the bundled script fonts.
-
-    Only text nodes are touched: the wrapping ``<div>`` lets the
-    ``>text<`` pattern see the ends of the document, and the span names
-    are ASCII so a second pass cannot re-wrap its own output.
-    """
-
-    def wrap(match: re.Match) -> str:
-        text = _CJK_RUN.sub(r'<span class="x-cjk">\g<0></span>', match.group(1))
-        text = _HANGUL_RUN.sub(r'<span class="x-hangul">\g<0></span>', text)
-        return f">{text}<"
-
-    wrapped = re.sub(r">([^<]*)<", wrap, f"<div>{body_html}</div>")
-    return wrapped[len("<div>") : -len("</div>")]
 
 
 def render_pdf(
@@ -104,14 +64,12 @@ def render_pdf(
     title: str = "",
     landscape: bool = False,
     extra_css: str = "",
-    page_size: tuple[float, float] | None = None,
-    margins: tuple[float, float, float, float] | None = None,
 ) -> None:
     document = (
         '<html><head><meta charset="utf-8">'
         f"<title>{html.escape(title)}</title>"
-        f"<style>{_base_css(landscape, page_size, margins)}{extra_css}</style>"
-        f"</head><body>{apply_script_fonts(body_html)}</body></html>"
+        f"<style>{_base_css(landscape)}{extra_css}</style>"
+        f"</head><body>{body_html}</body></html>"
     )
     try:
         with open(output_path, "wb") as handle:
@@ -198,7 +156,7 @@ ALLOWED_TAGS = set(nh3.ALLOWED_TAGS) | {
 }
 
 ALLOWED_ATTRIBUTES = {
-    "*": {"style", "title", "align", "valign", "width", "height", "dir", "lang", "class", "id"},
+    "*": {"style", "title", "align", "valign", "width", "height", "dir", "lang"},
     "a": {"href"},
     "img": {"src", "alt", "width", "height"},
     "td": {"colspan", "rowspan"},
@@ -208,26 +166,15 @@ ALLOWED_ATTRIBUTES = {
 }
 
 _UNSAFE_CSS = ("url(", "expression(", "@import", "javascript:", "-moz-binding", "behavior:", "\\")
-_BLOCKED_PROPERTIES = {"font-family", "font"}
-
-
-def _filter_style(value: str):
-    """Drop only the forbidden declarations from an inline ``style`` value."""
-    lowered = value.lower()
-    if any(token in lowered for token in _UNSAFE_CSS):
-        return None
-    kept = [
-        declaration.strip()
-        for declaration in value.split(";")
-        if declaration.strip() and declaration.split(":", 1)[0].strip().lower() not in _BLOCKED_PROPERTIES
-    ]
-    return "; ".join(kept) or None
 
 
 def _make_attribute_filter(allow_remote_images: bool):
     def attribute_filter(element: str, attribute: str, value: str):
         if attribute == "style":
-            return _filter_style(value)
+            lowered = value.lower()
+            if any(token in lowered for token in _UNSAFE_CSS):
+                return None
+            return value
         # Remote images are dropped even though http(s) is an allowed scheme
         # for links: the renderer must never have a reason to go to the
         # network. Only HTML output (never rendered here) may keep them.
@@ -263,74 +210,3 @@ def sanitize_html(raw: str, *, allow_remote_images: bool = False) -> str:
         attribute_filter=_make_attribute_filter(allow_remote_images),
         link_rel=None,
     )
-
-
-# --- Author stylesheet passthrough -------------------------------------------
-
-_STYLE_BLOCK = re.compile(r"<style[^>]*>(.*?)</style>", re.IGNORECASE | re.DOTALL)
-_CSS_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
-# A declaration ends at ';', at the closing '}' of its block, or at end of
-# input -- matching all three keeps a final `url(...)` from slipping through.
-_DECLARATION = re.compile(r"([\w-]+)\s*:\s*([^;{}]*)(;|(?=\})|$)")
-_FORBIDDEN_VALUE = ("url(", "expression(", "javascript:", "-moz-binding", "behavior", "\\")
-_FORBIDDEN_AT_STATEMENT = {"import", "namespace", "charset"}
-_FORBIDDEN_AT_BLOCK = {"font-face", "keyframes"}
-
-
-def extract_styles(raw: str) -> str:
-    """Concatenate every ``<style>`` block in *raw* HTML."""
-    css = "\n".join(_STYLE_BLOCK.findall(raw))
-    return re.sub(r"<!--|-->", "", css)
-
-
-def _drop_at_rule(css: str, start: int, block: bool) -> int:
-    """Return the index just past the at-rule beginning at ``start``."""
-    if not block:
-        end = css.find(";", start)
-        return len(css) if end < 0 else end + 1
-    brace = css.find("{", start)
-    if brace < 0:
-        return len(css)
-    depth = 0
-    for index in range(brace, len(css)):
-        if css[index] == "{":
-            depth += 1
-        elif css[index] == "}":
-            depth -= 1
-            if depth == 0:
-                return index + 1
-    return len(css)
-
-
-def _drop_forbidden_at_rules(css: str) -> str:
-    kept = []
-    index = 0
-    while index < len(css):
-        if css[index] == "@":
-            match = re.match(r"@([\w-]+)", css[index:])
-            name = match.group(1).lower() if match else ""
-            if name in _FORBIDDEN_AT_STATEMENT:
-                index = _drop_at_rule(css, index, block=False)
-                continue
-            if name in _FORBIDDEN_AT_BLOCK:
-                index = _drop_at_rule(css, index, block=True)
-                continue
-        kept.append(css[index])
-        index += 1
-    return "".join(kept)
-
-
-def sanitize_css(css: str) -> str:
-    """Allow the presentation layer of author CSS while removing anything
-    that could reach the network, a local file or a non-bundled font."""
-
-    def keep(match: re.Match) -> str:
-        prop, value = match.group(1).strip().lower(), match.group(2).strip().lower()
-        if prop in _BLOCKED_PROPERTIES or any(token in value for token in _FORBIDDEN_VALUE):
-            return ""
-        return match.group(0)
-
-    cleaned = _CSS_COMMENT.sub("", css)
-    cleaned = _DECLARATION.sub(keep, cleaned)
-    cleaned = _drop_forbidden_at_rules(cleaned)
-    return cleaned[: config.MAX_CSS_BYTES]

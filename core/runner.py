@@ -54,38 +54,27 @@ def warm_up() -> None:
     """Start the child machinery early so the first conversion is not slow.
 
     For forkserver this forces the server process (with its preloaded heavy
-    imports) to start; for spawn an idle worker is pre-spawned so the heavy
-    imports never land in this (web) process. Never raises.
+    imports) to start; for spawn there is nothing to pre-start, so the heavy
+    imports are warmed in this process instead. Never raises.
     """
     try:
         if config.CONVERSION_ISOLATION != "process":
             return
         context = _mp_context()
-        if context._name == "forkserver":
+        if "forkserver" in multiprocessing.get_all_start_methods():
             proc = context.Process(target=_noop, daemon=True)
             proc.start()
             proc.join(30)
         else:
-            _replenish_idle()
+            import conversions
+
+            conversions.preload()
     except Exception:
         logger.warning("converter warm-up failed", exc_info=True)
 
 
-def _worker_main(job_conn, result_conn):
-    """Idle worker: warm heavy imports, take one job, run it, report, exit."""
-    try:
-        import conversions
-
-        conversions.preload()
-    except Exception:  # noqa: S110 -- the job path imports again and reports properly
-        pass
-    try:
-        job = job_conn.recv()
-    except (EOFError, OSError):
-        job_conn.close()
-        result_conn.close()
-        return
-    job_conn.close()
+def _child_main(conn, family_id, output_ext, input_path, output_path, options):
+    """Child entry point. Never lets an exception escape."""
     try:
         try:
             import resource
@@ -97,13 +86,12 @@ def _worker_main(job_conn, result_conn):
 
         import conversions
 
-        family_id, output_ext, input_path, output_path, options = job
         converter = conversions.CONVERTERS[(family_id, output_ext)]
         result = converter(Path(input_path), Path(output_path), options)
-        result_conn.send({"ok": True, "result": asdict(result)})
+        conn.send({"ok": True, "result": asdict(result)})
     except ConversionError as exc:
         try:
-            result_conn.send(
+            conn.send(
                 {
                     "ok": False,
                     "user_message": str(exc),
@@ -114,7 +102,7 @@ def _worker_main(job_conn, result_conn):
             pass
     except BaseException as exc:
         try:
-            result_conn.send(
+            conn.send(
                 {
                     "ok": False,
                     "user_message": None,
@@ -124,107 +112,19 @@ def _worker_main(job_conn, result_conn):
         except Exception:  # noqa: S110 -- the parent treats a silent child as a crash
             pass
     finally:
-        result_conn.close()
-
-
-@dataclass
-class _Worker:
-    proc: object
-    job_conn: object
-    result_conn: object
-
-
-_IDLE = None
-_IDLE_LOCK = threading.Lock()
-
-
-def _close_worker(worker) -> None:
-    for conn in (worker.job_conn, worker.result_conn):
-        try:
-            conn.close()
-        except Exception:  # noqa: S110 -- already closed/broken
-            pass
-
-
-def _start_worker() -> _Worker:
-    # Pipe(duplex=False) yields (read end, write end): jobs flow parent->child,
-    # results flow child->parent.
-    context = _mp_context()
-    job_read, job_write = context.Pipe(duplex=False)
-    result_read, result_write = context.Pipe(duplex=False)
-    proc = context.Process(
-        target=_worker_main,
-        args=(job_read, result_write),
-        daemon=True,
-    )
-    proc.start()
-    job_read.close()
-    result_write.close()
-    return _Worker(proc, job_write, result_read)
-
-
-def _take_idle():
-    global _IDLE
-    with _IDLE_LOCK:
-        worker = _IDLE
-        _IDLE = None
-    if worker is None:
-        return None
-    if not worker.proc.is_alive():
-        _close_worker(worker)
-        worker.proc.join(1)
-        return None
-    return worker
-
-
-def _replenish_idle() -> None:
-    """Keep one pre-spawned idle worker waiting on spawn platforms only."""
-    global _IDLE
-    if _mp_context()._name != "spawn":
-        return
-    with _IDLE_LOCK:
-        if _IDLE is not None:
-            if _IDLE.proc.is_alive():
-                return
-            _close_worker(_IDLE)
-            _IDLE = None
-        try:
-            _IDLE = _start_worker()
-        except Exception:
-            _IDLE = None
-            logger.warning("idle conversion worker could not be started", exc_info=True)
-
-
-def _stop_idle() -> None:
-    global _IDLE
-    with _IDLE_LOCK:
-        worker = _IDLE
-        _IDLE = None
-    if worker is not None:
-        _close_worker(worker)
-        worker.proc.join(5)
-        if worker.proc.is_alive():
-            worker.proc.kill()
-            worker.proc.join(5)
+        conn.close()
 
 
 def _run_process(family_id, output_ext, input_path, output_path, options):
-    worker = _take_idle() or _start_worker()
-    job = (family_id, output_ext, str(input_path), str(output_path), options)
-    try:
-        worker.job_conn.send(job)
-    except (EOFError, OSError):
-        _close_worker(worker)
-        worker.proc.join(1)
-        worker = _start_worker()
-        worker.job_conn.send(job)
-    worker.job_conn.close()
-    # Respawning the idle worker is slow on spawn platforms (~0.5 s to create
-    # the process), so it happens off the request path; the lock keeps it to
-    # at most one waiting worker.
-    threading.Thread(target=_replenish_idle, name="idle-worker-respawn", daemon=True).start()
-    parent_conn = worker.result_conn
-    proc = worker.proc
+    context = _mp_context()
+    parent_conn, child_conn = context.Pipe(duplex=False)
+    proc = context.Process(
+        target=_child_main,
+        args=(child_conn, family_id, output_ext, str(input_path), str(output_path), options),
+        daemon=True,
+    )
+    proc.start()
+    child_conn.close()
     try:
         if parent_conn.poll(config.CONVERSION_TIMEOUT):
             try:
