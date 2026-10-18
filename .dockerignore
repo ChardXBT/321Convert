@@ -1,0 +1,15 @@
+**
+!requirements.txt
+!app.py
+!Procfile
+!gunicorn.conf.py
+!core/
+!core/**
+!conversions/
+!conversions/**
+!static/
+!static/**
+!templates/
+!templates/**
+**/__pycache__/
+**/*.pyc

@@ -254,6 +254,8 @@ def _convert(file_key, target, form):
             result_path = Path(result.path)
             if not result_path.is_file():
                 raise ConversionCrashed("NoOutput")
+            if result_path.stat().st_size > config.MAX_OUTPUT_BYTES:
+                return error_response("The converted file is too large to return safely.", 422)
             data = result_path.read_bytes()
             if len(data) > config.MAX_OUTPUT_BYTES:
                 return error_response("The converted file is too large to return safely.", 422)

@@ -11,8 +11,12 @@ You should hear back within a week.
 
 321Convert processes untrusted files. The controls that matter most:
 
-- Every conversion runs in a child process with a hard timeout; the web worker never parses
-  uploads itself.
+- Every conversion runs in a child process with a hard timeout and a bounded
+  writable-memory budget. Conversion parsers run in child processes; the web worker
+  performs bounded upload validation. This is a resource/isolation boundary for
+  reliability — native parsing libraries still run inside the child, so it should not be
+  treated as a perfect security sandbox, and kernel-level out-of-memory handling is not
+  something user-space limits can fully control.
 - Uploads are validated by extension and content, bounded in size, and Office archives are
   checked for ZIP bombs and path traversal before parsing.
 - Image decoding is limited to an allow-list of formats and a pixel ceiling.

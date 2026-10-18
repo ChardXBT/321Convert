@@ -122,3 +122,36 @@ def test_output_size_cap(client, monkeypatch):
     response = samples.convert(client, "x.png", samples.png(), "jpg")
     assert response.status_code == 422
     assert "too large" in response.get_json()["error"]
+
+
+def test_output_size_rejected_before_read(client, monkeypatch, tmp_path):
+    """An oversized output must be refused from stat(), before read_bytes()."""
+    from pathlib import Path
+
+    from core import runner as runner_module
+    from core.runner import ConversionResult
+
+    monkeypatch.setattr(config, "MAX_OUTPUT_BYTES", 16)
+    oversized = tmp_path / "out.jpg"
+    oversized.write_bytes(b"x" * 17)
+    monkeypatch.setattr(
+        runner_module,
+        "run",
+        lambda *args, **kwargs: ConversionResult(oversized, "jpg", []),
+    )
+
+    real_read_bytes = Path.read_bytes
+    forbidden_reads = []
+
+    def fake_read_bytes(self, *args, **kwargs):
+        if self == oversized:
+            forbidden_reads.append(self)
+            raise AssertionError("read_bytes must not run for an oversized output")
+        return real_read_bytes(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_bytes", fake_read_bytes)
+
+    response = samples.convert(client, "x.png", samples.png(), "jpg")
+    assert response.status_code == 422
+    assert "too large" in response.get_json()["error"]
+    assert forbidden_reads == []

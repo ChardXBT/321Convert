@@ -13,7 +13,7 @@ import threading
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from core import config
+from core import config, resources
 from core.errors import (
     ConversionCrashed,
     ConversionError,
@@ -31,7 +31,7 @@ class ConversionResult:
     notes: list[str] = field(default_factory=list)
 
 
-_SEMAPHORE = threading.BoundedSemaphore(config.MAX_CONCURRENT_CONVERSIONS)
+_SEMAPHORE = threading.BoundedSemaphore(resources.concurrency_limit())
 _MP_CONTEXT = None
 
 
@@ -54,27 +54,38 @@ def warm_up() -> None:
     """Start the child machinery early so the first conversion is not slow.
 
     For forkserver this forces the server process (with its preloaded heavy
-    imports) to start; for spawn there is nothing to pre-start, so the heavy
-    imports are warmed in this process instead. Never raises.
+    imports) to start; for spawn an idle worker is pre-spawned so the heavy
+    imports never land in this (web) process. Never raises.
     """
     try:
         if config.CONVERSION_ISOLATION != "process":
             return
         context = _mp_context()
-        if "forkserver" in multiprocessing.get_all_start_methods():
+        if context._name == "forkserver":
             proc = context.Process(target=_noop, daemon=True)
             proc.start()
             proc.join(30)
         else:
-            import conversions
-
-            conversions.preload()
+            _replenish_idle()
     except Exception:
         logger.warning("converter warm-up failed", exc_info=True)
 
 
-def _child_main(conn, family_id, output_ext, input_path, output_path, options):
-    """Child entry point. Never lets an exception escape."""
+def _worker_main(job_conn, result_conn):
+    """Idle worker: warm heavy imports, take one job, run it, report, exit."""
+    try:
+        import conversions
+
+        conversions.preload()
+    except Exception:  # noqa: S110 -- the job path imports again and reports properly
+        pass
+    try:
+        job = job_conn.recv()
+    except (EOFError, OSError):
+        job_conn.close()
+        result_conn.close()
+        return
+    job_conn.close()
     try:
         try:
             import resource
@@ -84,14 +95,19 @@ def _child_main(conn, family_id, output_ext, input_path, output_path, options):
         except Exception:  # noqa: S110 -- non-Linux, or rlimits unavailable
             pass
 
+        # Writable-memory cap is outside the CPU-rlimit catch: on Linux a
+        # failure here must fail the conversion rather than run unbounded.
+        resources.limit_memory()
+
         import conversions
 
+        family_id, output_ext, input_path, output_path, options = job
         converter = conversions.CONVERTERS[(family_id, output_ext)]
         result = converter(Path(input_path), Path(output_path), options)
-        conn.send({"ok": True, "result": asdict(result)})
+        result_conn.send({"ok": True, "result": asdict(result)})
     except ConversionError as exc:
         try:
-            conn.send(
+            result_conn.send(
                 {
                     "ok": False,
                     "user_message": str(exc),
@@ -102,44 +118,139 @@ def _child_main(conn, family_id, output_ext, input_path, output_path, options):
             pass
     except BaseException as exc:
         try:
-            conn.send(
+            result_conn.send(
                 {
                     "ok": False,
-                    "user_message": None,
+                    "user_message": (
+                        "The conversion needs too much memory. Try a smaller file."
+                        if isinstance(exc, MemoryError)
+                        else None
+                    ),
                     "error_type": type(exc).__name__,
                 }
             )
         except Exception:  # noqa: S110 -- the parent treats a silent child as a crash
             pass
     finally:
-        conn.close()
+        result_conn.close()
+
+
+@dataclass
+class _Worker:
+    proc: object
+    job_conn: object
+    result_conn: object
+
+
+_IDLE = None
+_IDLE_LOCK = threading.Lock()
+
+
+def _close_worker(worker) -> None:
+    for conn in (worker.job_conn, worker.result_conn):
+        try:
+            conn.close()
+        except Exception:  # noqa: S110 -- already closed/broken
+            pass
+
+
+def _start_worker() -> _Worker:
+    # Pipe(duplex=False) yields (read end, write end): jobs flow parent->child,
+    # results flow child->parent.
+    context = _mp_context()
+    job_read, job_write = context.Pipe(duplex=False)
+    result_read, result_write = context.Pipe(duplex=False)
+    proc = context.Process(
+        target=_worker_main,
+        args=(job_read, result_write),
+        daemon=True,
+    )
+    try:
+        proc.start()
+    except Exception:
+        for conn in (job_read, job_write, result_read, result_write):
+            conn.close()
+        raise
+    job_read.close()
+    result_write.close()
+    return _Worker(proc, job_write, result_read)
+
+
+def _take_idle():
+    global _IDLE
+    with _IDLE_LOCK:
+        worker = _IDLE
+        _IDLE = None
+    if worker is None:
+        return None
+    if not worker.proc.is_alive():
+        _close_worker(worker)
+        worker.proc.join(1)
+        return None
+    return worker
+
+
+def _replenish_idle() -> None:
+    """Keep one pre-spawned idle worker waiting on spawn platforms only."""
+    global _IDLE
+    if _mp_context()._name != "spawn":
+        return
+    with _IDLE_LOCK:
+        if _IDLE is not None:
+            if _IDLE.proc.is_alive():
+                return
+            _close_worker(_IDLE)
+            _IDLE = None
+        try:
+            _IDLE = _start_worker()
+        except Exception:
+            _IDLE = None
+            logger.warning("idle conversion worker could not be started", exc_info=True)
+
+
+def _stop_idle() -> None:
+    global _IDLE
+    with _IDLE_LOCK:
+        worker = _IDLE
+        _IDLE = None
+    if worker is not None:
+        _close_worker(worker)
+        worker.proc.join(5)
+        if worker.proc.is_alive():
+            worker.proc.kill()
+            worker.proc.join(5)
 
 
 def _run_process(family_id, output_ext, input_path, output_path, options):
-    context = _mp_context()
-    parent_conn, child_conn = context.Pipe(duplex=False)
-    proc = context.Process(
-        target=_child_main,
-        args=(child_conn, family_id, output_ext, str(input_path), str(output_path), options),
-        daemon=True,
-    )
-    proc.start()
-    child_conn.close()
+    worker = _take_idle() or _start_worker()
+    job = (family_id, output_ext, str(input_path), str(output_path), options)
     try:
+        try:
+            worker.job_conn.send(job)
+        except (EOFError, OSError):
+            _close_worker(worker)
+            if worker.proc.is_alive():
+                worker.proc.kill()
+            worker.proc.join(5)
+            worker = _start_worker()
+            worker.job_conn.send(job)
+        worker.job_conn.close()
+        # Respawning the idle worker is slow on spawn platforms (~0.5 s to
+        # create the process), so it happens off the request path; the lock
+        # keeps it to at most one waiting worker.
+        if _mp_context()._name == "spawn":
+            threading.Thread(target=_replenish_idle, name="idle-worker-respawn", daemon=True).start()
+        parent_conn = worker.result_conn
+        proc = worker.proc
         if parent_conn.poll(config.CONVERSION_TIMEOUT):
             try:
                 message = parent_conn.recv()
             except EOFError as exc:
-                proc.join(10)
                 raise ConversionCrashed("EOFError") from exc
         else:
-            proc.kill()
-            proc.join(5)
             raise ConversionTimeout()
         proc.join(10)
-        if proc.is_alive():
-            proc.kill()
-            proc.join(5)
+        # The finalizer always kills lingering children, including after result.
         if not isinstance(message, dict) or "ok" not in message:
             raise ConversionCrashed("BadMessage")
         if message["ok"]:
@@ -153,7 +264,10 @@ def _run_process(family_id, output_ext, input_path, output_path, options):
             raise ConversionError(message["user_message"])
         raise ConversionCrashed(message.get("error_type") or "UnknownError")
     finally:
-        parent_conn.close()
+        _close_worker(worker)
+        if worker.proc.is_alive():
+            worker.proc.kill()
+        worker.proc.join(5)
 
 
 def _run_inline(family_id, output_ext, input_path, output_path, options):

@@ -16,8 +16,8 @@ take up to a minute. After that, conversions are fast.
 
 | Input | Formats | Output |
 | --- | --- | --- |
-| Image | JPG, PNG, WebP, GIF, BMP, TIFF, HEIC/HEIF, AVIF, ICO | JPG, PNG, WebP, GIF, BMP, TIFF, AVIF, ICO, PDF |
-| PDF | PDF | DOCX, TXT, PNG, JPG |
+| Image | JPG, PNG, WebP, GIF, BMP, TIFF, HEIC/HEIF, AVIF, ICO | JPG, PNG, WebP, GIF, BMP, TIFF, AVIF, HEIC, ICO, PDF, TXT (OCR) |
+| PDF | PDF | DOCX, TXT (with OCR for scanned pages), PNG, JPG |
 | Spreadsheet | XLSX | CSV, PDF |
 | CSV | CSV | XLSX |
 | Word document | DOCX | PDF, TXT, HTML |
@@ -35,31 +35,40 @@ Several files can be queued at once; each is converted in turn and downloaded in
   white for JPG and PDF.
 - Animated GIF/WebP and multi-page TIFF keep all frames when the output is GIF, WebP, TIFF or
   PDF (one page per frame); other outputs take the first frame.
-- **Quality** (1–100) applies to JPG, WebP and AVIF. **Maximum dimension** shrinks the longest
-  side to the given size and never enlarges.
+- **Quality** (1–100) applies to JPG, WebP, AVIF and HEIC. **Maximum dimension** shrinks the
+  longest side to the given size and never enlarges.
 - ICO output is capped at 256 × 256 and includes the standard sizes up to that limit.
 - Image → PDF places each image on an A4 page, fitted inside a margin.
+- Image → TXT runs OCR (RapidOCR, English and Chinese models) on the picture and returns the
+  recognised text; the result carries a note reminding you to check it.
 
 ### Documents and spreadsheets
 
 - **PDF → DOCX** extracts selectable text (one page per PDF page, with embedded images) — it
-  does not reproduce the original layout and does not perform OCR. **PDF → TXT** extracts text
-  only. **PDF → PNG/JPG** rasterises pages at 144 DPI; multi-page PDFs return a ZIP with one
-  image per page. Password-protected PDFs are refused with a clear message.
+  does not reproduce the original layout. **PDF → TXT** extracts text only. Pages with no
+  selectable text (scans) are rendered and run through OCR, up to 10 pages or 60 seconds per
+  file; the response notes which pages were recognised. **PDF → PNG/JPG** rasterises pages at
+  144 DPI; multi-page PDFs return a ZIP with one image per page. Password-protected PDFs are
+  refused with a clear message.
 - **XLSX → CSV** exports one worksheet (the first, or the one you name) as UTF-8 with BOM so
   Excel opens it correctly; dates become ISO 8601 and formula-looking text is escaped to
   prevent spreadsheet formula injection. **XLSX → PDF** renders every worksheet (or a named one)
   as a table. **CSV → XLSX** detects the delimiter, converts numeric fields to numbers and stores
   everything else as literal text.
-- **DOCX → PDF/HTML/TXT** preserves headings, paragraphs, bold/italic/underline, lists, tables,
-  hyperlinks, page breaks and embedded images. Layout is approximated, not reproduced.
-- **HTML → PDF** renders a sanitised subset of HTML (text, headings, lists, tables, inline
-  styles, embedded `data:` images). Scripts, external stylesheets and remote images are removed
-  and nothing is fetched from the network.
+- **DOCX → PDF/HTML/TXT** preserves headings, paragraphs, alignment, indents and spacing,
+  font sizes and colours, highlights, super/subscript, bold/italic/underline, bulleted and
+  numbered lists, tables (widths, shading, merged cells), hyperlinks, page breaks, page size
+  and margins, header/footer text and embedded images at their set sizes. Fonts are replaced
+  by the bundled families, so pagination can differ from Word.
+- **HTML → PDF** renders text, headings, lists, tables, images embedded as `data:` URIs, inline
+  styles and the document's own `<style>` rules (classes and ids included). Scripts, external
+  stylesheets, remote images, `@import`/`@font-face` and anything that could reach the network
+  or a local file are removed; nothing is ever fetched.
 - **Markdown → HTML/PDF** supports tables, fenced code and nested lists; raw HTML inside the
   Markdown is sanitised.
-- Generated PDFs embed DejaVu Sans, so Latin, Greek, Cyrillic and most symbols render
-  correctly. CJK text is not covered.
+- Generated PDFs embed DejaVu Sans for Latin, Greek and Cyrillic, Droid Sans Fallback for
+  Chinese and Japanese, and Noto Sans KR for Korean, so mixed-script documents render without
+  missing glyphs.
 
 ## Limits
 
@@ -68,10 +77,12 @@ Several files can be queued at once; each is converted in turn and downloaded in
 | Upload size | 25 MB per file |
 | Image size | 40 megapixels; animations up to 300 frames / 120 megapixels in total |
 | PDF | 300 pages for text extraction; the first 50 pages for rasterising |
+| OCR | 10 scanned pages or 60 seconds per file, whichever comes first |
 | Spreadsheet | 500 000 cells; 2 000 rows per sheet in PDF output |
-| HTML | 3 MB |
+| HTML | 3 MB of markup; 200 KB of author CSS |
 | Time | 90 seconds per conversion |
-| Rate | 60 conversions per 10 minutes per client; 2 conversions at a time |
+| Rate | 60 conversions per 10 minutes per client; 1 conversion at a time on Render |
+| Memory | +256 MiB of writable memory per conversion (Linux); concurrency auto-clamped to fit the container's cgroup limit |
 
 Over-limit requests fail fast with a plain-language error. Everything in the table is an
 environment variable (see Deployment).
@@ -81,8 +92,13 @@ environment variable (see Deployment).
 - Each request runs in its own temporary directory. The result is read into memory and the
   directory is deleted before the response is sent. There are no public download links,
   accounts, databases, analytics or persistent uploads.
-- Every conversion runs in an isolated child process with a hard timeout. A crash, hang or
-  memory blow-up in a parser kills that process only; the web server keeps serving.
+- Every conversion runs in an isolated child process with a hard timeout and, on Linux, a
+  bounded writable-memory budget (`CONVERSION_MEMORY_BYTES`, 256 MiB by default) on top of
+  its current footprint. Exhausting that budget fails the conversion with a controlled 422
+  instead of growing until the host runs out of memory. These limits reduce the blast radius
+  of parser bugs and runaway allocations but are not an absolute guarantee — the OS decides
+  what to kill under true memory pressure, and native parsing libraries run inside the child,
+  so process isolation is a reliability boundary, not a hardened security sandbox.
 - Uploads are validated by extension and content (PDF header, Office ZIP structure and
   size/path checks, text files must not contain NUL bytes, images must decode as one of the
   accepted formats). Decompression bombs are refused.
@@ -125,12 +141,21 @@ The original `POST /convert` and `POST /document/convert` routes still work as t
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements-dev.txt
+python -m conversions.ocr_models
 python app.py
 ```
 
-Open `http://127.0.0.1:5000`. On Windows each conversion spawns a fresh child process
-(about a second); on Linux a pre-warmed fork server makes this negligible. Set
-`CONVERSION_ISOLATION=inline` to run conversions in-process while debugging.
+`python -m conversions.ocr_models` downloads the pinned OCR model files and verifies their
+SHA-256 checksums. It runs during the Render build and again inside `gunicorn.conf.py`'s
+`on_starting` hook as a startup fallback (in case the platform does not sync the build
+command): only the model files are fetched and verified — no uploads ever leave the service —
+and startup fails if they are missing or corrupt, so there is no runtime model download
+during requests.
+
+Open `http://127.0.0.1:5000`. Conversions run in short-lived child processes: Linux uses a
+pre-warmed fork server, and on Windows/macOS one idle worker is kept pre-spawned so there is
+no start-up pause. Set `CONVERSION_ISOLATION=inline` to run conversions in-process while
+debugging.
 
 ## Tests
 
@@ -142,7 +167,8 @@ pytest -m e2e -q          # browser tests against a live local server
 python scripts/capture_screenshots.py [--base-url URL]   # refresh docs/screenshots
 ```
 
-CI runs the same steps on Python 3.12 and 3.13 plus `pip-audit`; Dependabot keeps
+CI runs the same steps on Python 3.12 and 3.13, a Gunicorn smoke test that boots the exact
+production command and converts files through it, and `pip-audit`; Dependabot keeps
 dependencies current. The design is documented in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Deployment
@@ -155,18 +181,23 @@ with a health check on `/health`. No secrets are required. Pushing to `master` d
 | `MAX_UPLOAD_BYTES` | 26214400 | Maximum request size |
 | `MAX_OUTPUT_BYTES` | 78643200 | Maximum returned file size |
 | `CONVERSION_TIMEOUT` | 90 | Seconds before a conversion is killed |
-| `MAX_CONCURRENT_CONVERSIONS` | 2 | Conversions running at once |
+| `MAX_CONCURRENT_CONVERSIONS` | 2 (1 on Render) | Requested conversions at once; auto-clamped down by the cgroup memory limit |
+| `CONVERSION_MEMORY_BYTES` | 268435456 | Extra writable-memory budget each conversion child may grow (Linux) |
 | `RATE_LIMIT_REQUESTS` / `RATE_LIMIT_WINDOW` | 60 / 600 | Per-client rate limit |
-| `MAX_IMAGE_PIXELS`, `MAX_FRAMES`, `MAX_PDF_PAGES`, `MAX_PDF_RENDER_PAGES`, `MAX_SPREADSHEET_CELLS`, `MAX_PDF_TABLE_ROWS`, `MAX_HTML_BYTES` | see `core/config.py` | Content limits |
+| `MAX_IMAGE_PIXELS`, `MAX_FRAMES`, `MAX_PDF_PAGES`, `MAX_PDF_RENDER_PAGES`, `MAX_SPREADSHEET_CELLS`, `MAX_PDF_TABLE_ROWS`, `MAX_HTML_BYTES`, `MAX_CSS_BYTES` | see `core/config.py` | Content limits |
+| `OCR_MAX_PAGES` / `OCR_TIME_BUDGET` / `OCR_RENDER_SCALE` / `OCR_THREADS` | 10 / 60 / 1.4 / 1 | OCR page cap, time budget (s), render scale (1.4 ≈ 100 DPI) and ONNX threads |
 | `CONVERSION_ISOLATION` | process | `process` or `inline` |
 | `TRUST_PROXY` | false (true on Render) | Trust one proxy hop for client IPs |
 | `LOG_LEVEL` | INFO | Logging verbosity |
 
 ## Known limitations
 
-- No OCR: scanned PDFs convert to empty text with a note saying so.
-- DOCX → PDF and HTML → PDF approximate layout; complex designs will not match Word or a browser.
-- HEIC/HEIF is an input format only; CJK glyphs are not embedded in generated PDFs.
+- OCR uses general-purpose English/Chinese models; handwriting, very small print and other
+  scripts are recognised less reliably, each scanned page costs several seconds of CPU, and
+  the text detector analyses a reduced-resolution image (long side ≤ 736 px) to stay within
+  the memory budget.
+- Generated PDFs use the bundled fonts, so a document's own typefaces are substituted and
+  page breaks can fall differently from Word or a browser.
 - The free Render tier has a cold start of up to a minute after inactivity.
 
 ## Legal

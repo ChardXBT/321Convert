@@ -1,0 +1,12 @@
+FROM python:3.12-slim-bookworm
+WORKDIR /app
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PORT=8000
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+COPY core/ ./core/
+COPY conversions/ ./conversions/
+RUN python -m conversions.ocr_models
+COPY app.py Procfile gunicorn.conf.py ./
+COPY static/ ./static/
+COPY templates/ ./templates/
+CMD ["sh", "-c", "eval \"exec $(cut -d' ' -f2- Procfile)\""]

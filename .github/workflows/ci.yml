@@ -4,6 +4,7 @@ on:
   push:
     branches: [master]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -22,6 +23,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
       - run: pip install -r requirements-dev.txt
+      - run: python -m conversions.ocr_models
       - run: ruff check .
       - run: ruff format --check .
       - run: pytest -q
@@ -35,6 +37,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements-dev.txt
+      - run: python -m conversions.ocr_models
       - run: playwright install --with-deps chromium
       - run: pytest -m e2e -q
 
@@ -48,3 +51,38 @@ jobs:
           cache: pip
       - run: pip install pip-audit
       - run: pip-audit -r requirements.txt
+
+  gunicorn-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Build production dependencies and verified OCR models
+        run: docker build -f .github/Dockerfile.smoke -t converter-smoke .
+      - name: Start Gunicorn with the free instance memory limit
+        run: |
+          docker network create converter-smoke
+          docker run -d --name converter-smoke --network converter-smoke \
+            --memory 512m --memory-swap 512m --cpus 1 \
+            -e TRUST_PROXY=true -e MAX_CONCURRENT_CONVERSIONS=2 \
+            -e RENDER_GIT_COMMIT="${{ github.sha }}" \
+            -p 127.0.0.1:8000:8000 converter-smoke
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:8000/health && exit 0
+            sleep 1
+          done
+          echo "gunicorn did not become healthy" >&2
+          docker logs converter-smoke
+          exit 1
+      - name: Verify conversions, OCR, concurrency, memory rejection and health
+        run: python scripts/smoke_service.py --container converter-smoke
+      - name: Service log and cleanup
+        if: always()
+        run: |
+          docker logs converter-smoke
+          docker rm -f converter-smoke
+          docker network rm converter-smoke
