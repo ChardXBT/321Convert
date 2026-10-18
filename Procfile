@@ -1,1 +1,1 @@
-web: gunicorn --workers 1 --threads 2 --timeout 120 --max-requests 250 --max-requests-jitter 25 --limit-request-line 4094 --limit-request-fields 50 app:app
+web: gunicorn --workers 1 --threads 4 --timeout 150 --graceful-timeout 30 --max-requests 1000 --max-requests-jitter 100 --limit-request-line 4094 --limit-request-fields 50 --access-logfile - --access-logformat '%(h)s "%(r)s" %(s)s %(b)s %(M)sms' app:app

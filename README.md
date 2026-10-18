@@ -1,124 +1,174 @@
 # 321Convert
 
-My first deployed project: a Flask web app for converting images and documents, with temporary file processing and direct downloads.
+A small, private file converter. Drop in images, PDFs, spreadsheets, Word documents,
+Markdown, HTML or text; pick a target format; download the result. No accounts, no stored
+files, no third-party services.
 
-**Live demo:** [three21convert.onrender.com](https://three21convert.onrender.com)
+**Live:** [three21convert.onrender.com](https://three21convert.onrender.com) · Maintained by
+[ChardXBT](https://github.com/ChardXBT) · MIT licensed
 
-Maintained by [ChardXBT](https://github.com/ChardXBT).
+![321Convert after converting a PNG to WebP and an XLSX to CSV](docs/screenshots/desktop-results.png)
 
-![321Convert desktop interface with image upload, output format, quality, and processing limits](docs/screenshots/desktop-image-converter.jpg)
+The free Render instance sleeps when idle, so the first request after a quiet period can
+take up to a minute. After that, conversions are fast.
 
-Choose a file, select a conversion, and download the result. No account is required. The Image and Document tabs keep the two workflows on one page.
+## What it converts
 
-Render may need time to wake the service after inactivity. Wait for the converter to appear before uploading a file.
-
-## Image conversion
-
-Select a file or drag it into the upload area. Convert between JPG, PNG, WebP, GIF, BMP, and TIFF. The quality control accepts values from 1 to 100 and affects JPG and WebP output. Successful conversions show an image preview and a download button.
-
-![PNG converted to WebP at quality 82, with the resulting image preview and download button](docs/screenshots/desktop-image-result.jpg)
-
-This example converts `mountain-landscape.png` to WebP. Image conversion uses the first frame of animated or multi-frame files. JPEG output places transparent areas on a white background.
-
-## Document conversion
-
-| Input | Output | What it does |
+| Input | Formats | Output |
 | --- | --- | --- |
-| PDF | DOCX | Extracts selectable text into a Word document, grouped by page. It does not reproduce the original page layout or perform OCR. |
-| XLSX | PDF | Turns a worksheet into a table in a PDF. |
-| XLSX | CSV | Exports worksheet data as CSV. Formula-like text values are escaped to reduce spreadsheet formula injection. |
-| HTML / HTM | PDF | Prints the HTML source as inert text. It does not render a webpage or fetch remote resources. |
-| TXT | HTML | Escapes the text and adds a configurable document title. |
+| Image | JPG, PNG, WebP, GIF, BMP, TIFF, HEIC/HEIF, AVIF, ICO | JPG, PNG, WebP, GIF, BMP, TIFF, AVIF, ICO, PDF |
+| PDF | PDF | DOCX, TXT, PNG, JPG |
+| Spreadsheet | XLSX | CSV, PDF |
+| CSV | CSV | XLSX |
+| Word document | DOCX | PDF, TXT, HTML |
+| HTML | HTML, HTM | PDF |
+| Plain text | TXT | PDF, HTML |
+| Markdown | MD, MARKDOWN | HTML, PDF |
 
-For XLSX conversions, enter an optional sheet name to choose a worksheet. Leave it blank to use the first sheet.
+Several files can be queued at once; each is converted in turn and downloaded individually.
 
-![XLSX to CSV conversion completed for the Supplies worksheet](docs/screenshots/desktop-spreadsheet-result.jpg)
+### Images
 
-The `Supplies` worksheet is ready to download as CSV. Document results use the same download control as images, without an inline document preview.
+- EXIF orientation is applied, then all other metadata (location, device) is dropped.
+  Embedded colour profiles are kept when the output format supports them.
+- Transparency is preserved for PNG, WebP, GIF, TIFF, AVIF and ICO; it is flattened onto
+  white for JPG and PDF.
+- Animated GIF/WebP and multi-page TIFF keep all frames when the output is GIF, WebP, TIFF or
+  PDF (one page per frame); other outputs take the first frame.
+- **Quality** (1–100) applies to JPG, WebP and AVIF. **Maximum dimension** shrinks the longest
+  side to the given size and never enlarges.
+- ICO output is capped at 256 × 256 and includes the standard sizes up to that limit.
+- Image → PDF places each image on an A4 page, fitted inside a margin.
 
-![TXT to HTML conversion completed with the custom title Project notes in dark theme](docs/screenshots/desktop-text-result.jpg)
+### Documents and spreadsheets
 
-The TXT workflow exposes a document title field. Here, `project-notes.txt` becomes an HTML document titled **Project notes**.
+- **PDF → DOCX** extracts selectable text (one page per PDF page, with embedded images) — it
+  does not reproduce the original layout and does not perform OCR. **PDF → TXT** extracts text
+  only. **PDF → PNG/JPG** rasterises pages at 144 DPI; multi-page PDFs return a ZIP with one
+  image per page. Password-protected PDFs are refused with a clear message.
+- **XLSX → CSV** exports one worksheet (the first, or the one you name) as UTF-8 with BOM so
+  Excel opens it correctly; dates become ISO 8601 and formula-looking text is escaped to
+  prevent spreadsheet formula injection. **XLSX → PDF** renders every worksheet (or a named one)
+  as a table. **CSV → XLSX** detects the delimiter, converts numeric fields to numbers and stores
+  everything else as literal text.
+- **DOCX → PDF/HTML/TXT** preserves headings, paragraphs, bold/italic/underline, lists, tables,
+  hyperlinks, page breaks and embedded images. Layout is approximated, not reproduced.
+- **HTML → PDF** renders a sanitised subset of HTML (text, headings, lists, tables, inline
+  styles, embedded `data:` images). Scripts, external stylesheets and remote images are removed
+  and nothing is fetched from the network.
+- **Markdown → HTML/PDF** supports tables, fenced code and nested lists; raw HTML inside the
+  Markdown is sanitised.
+- Generated PDFs embed DejaVu Sans, so Latin, Greek, Cyrillic and most symbols render
+  correctly. CJK text is not covered.
 
-DOCX to PDF and OCR are intentionally not advertised because they require system software that is not available on a standard Render Python service.
+## Limits
 
-## Mobile layout and interface details
+| Limit | Default |
+| --- | --- |
+| Upload size | 25 MB per file |
+| Image size | 40 megapixels; animations up to 300 frames / 120 megapixels in total |
+| PDF | 300 pages for text extraction; the first 50 pages for rasterising |
+| Spreadsheet | 500 000 cells; 2 000 rows per sheet in PDF output |
+| HTML | 3 MB |
+| Time | 90 seconds per conversion |
+| Rate | 60 conversions per 10 minutes per client; 2 conversions at a time |
 
-The layout stacks vertically on narrow screens. The header switch changes between light and dark themes and remembers the selection in the browser. The footer opens Terms and MIT License dialogs and links to this repository.
+Over-limit requests fail fast with a plain-language error. Everything in the table is an
+environment variable (see Deployment).
 
-<img src="docs/screenshots/mobile-image-converter.jpg" alt="321Convert at a 390-pixel mobile viewport, with stacked upload and conversion controls" width="320">
+## Privacy and security
 
-During conversion, the submit button is disabled and a progress message appears. Failed requests show an inline error and allow another attempt. The deployed app displays a 25 MB request limit.
+- Each request runs in its own temporary directory. The result is read into memory and the
+  directory is deleted before the response is sent. There are no public download links,
+  accounts, databases, analytics or persistent uploads.
+- Every conversion runs in an isolated child process with a hard timeout. A crash, hang or
+  memory blow-up in a parser kills that process only; the web server keeps serving.
+- Uploads are validated by extension and content (PDF header, Office ZIP structure and
+  size/path checks, text files must not contain NUL bytes, images must decode as one of the
+  accepted formats). Decompression bombs are refused.
+- HTML and Markdown input is sanitised with an allow-list, and the PDF renderer is locked to a
+  read-only font directory with network access disabled.
+- Responses carry a strict Content-Security-Policy (nonce-based for the single inline
+  script), `frame-ancestors 'none'`, HSTS, `Referrer-Policy: no-referrer` and the usual
+  hardening headers. POST requests must be same-origin; an in-memory per-IP rate limit and a
+  concurrency cap protect the service.
+- Error messages never include file names, file contents or parser internals; logs record only
+  the conversion type, timing, sizes and exception class.
 
-<details>
-<summary>Example: conversion error feedback</summary>
+See [SECURITY.md](SECURITY.md) for how to report a vulnerability.
 
-![Inline error after requesting a worksheet that does not exist](docs/screenshots/desktop-validation-error.jpg)
+## HTTP API
 
-An invalid sheet name produces a general conversion error. The selected file and controls remain available so the request can be corrected.
+The UI uses the same endpoints you can call directly.
 
-</details>
+```
+GET  /api/formats            → JSON describing families, outputs and options
+POST /api/convert            multipart/form-data: file=<upload> target=<ext> [quality] [max_dimension] [sheet_name] [title]
+GET  /health                 → {"status": "ok", "version": "<git sha>"}
+```
 
-## Implementation
+A successful `POST /api/convert` returns the converted file as an attachment with
+`Content-Disposition` (UTF-8 filename) and an `X-Conversion-Notes` header holding a JSON list
+of short notes such as `"Transparent areas were flattened to white."`. Errors are JSON:
+`{"success": false, "error": "…"}` with status 400 (bad request), 413 (too large), 422
+(could not convert), 429 (rate limited), 503 (busy) or 504 (timed out).
 
-Flask serves a Jinja template and two conversion endpoints. Plain JavaScript submits files, displays status messages, and creates browser-local download links from the returned files. CSS provides the responsive layout and themes.
+```sh
+curl -F file=@photo.heic -F target=jpg -F quality=85 https://three21convert.onrender.com/api/convert -o photo.jpg
+```
 
-- **Images:** Pillow validates and converts the image data.
-- **Spreadsheets:** pandas and openpyxl read worksheet data.
-- **Documents:** pypdf extracts PDF text; python-docx and docxcompose build DOCX files; xhtml2pdf generates PDFs from escaped text or generated tables.
-- **Deployment:** Render runs Gunicorn. The Blueprint uses Python 3.12.11 and checks `/health`.
-
-## Privacy model
-
-- Files are processed inside a unique operating-system temporary directory.
-- Results are returned directly in the conversion request as private attachments.
-- Temporary input and output files are deleted before the response is sent.
-- There are no public download URLs, accounts, databases, analytics, or permanent uploads.
-
-No hosted service can honestly promise to be "unhackable." This project reduces risk with strict conversion allowlists, bounded uploads and outputs, archive-bomb checks, image decompression-bomb protection, rate limiting, sanitized errors, security headers, and a strict Content Security Policy.
+The original `POST /convert` and `POST /document/convert` routes still work as thin aliases.
 
 ## Local setup
 
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
 python app.py
 ```
 
-Open `http://127.0.0.1:5000`.
+Open `http://127.0.0.1:5000`. On Windows each conversion spawns a fresh child process
+(about a second); on Linux a pre-warmed fork server makes this negligible. Set
+`CONVERSION_ISOLATION=inline` to run conversions in-process while debugging.
 
 ## Tests
 
 ```powershell
-python -m unittest discover -v
-python -m pip check
+ruff check . ; ruff format --check .
+pytest -q                 # unit, API and security tests (fast, in-process conversions)
+playwright install chromium
+pytest -m e2e -q          # browser tests against a live local server
+python scripts/capture_screenshots.py [--base-url URL]   # refresh docs/screenshots
 ```
 
-## Render deployment
+CI runs the same steps on Python 3.12 and 3.13 plus `pip-audit`; Dependabot keeps
+dependencies current. The design is documented in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-The repository includes `render.yaml` and a hardened `Procfile`. Connect the public GitHub repository to Render and deploy the Blueprint. Do not add secrets: the app does not require any.
+## Deployment
 
-See [render.yaml](render.yaml), [Procfile](Procfile), and [requirements.txt](requirements.txt) for the deployment commands and Python dependencies.
-
-Useful environment controls:
+[render.yaml](render.yaml) is a Render Blueprint: a single Python web service running Gunicorn
+with a health check on `/health`. No secrets are required. Pushing to `master` deploys.
 
 | Variable | Default | Purpose |
 | --- | ---: | --- |
 | `MAX_UPLOAD_BYTES` | 26214400 | Maximum request size |
 | `MAX_OUTPUT_BYTES` | 78643200 | Maximum returned file size |
-| `MAX_ARCHIVE_BYTES` | 104857600 | Maximum expanded Office archive size |
-| `RATE_LIMIT_REQUESTS` | 20 | Requests allowed per window |
-| `RATE_LIMIT_WINDOW` | 600 | Rate-limit window in seconds |
-| `TRUST_PROXY` | false locally, true on Render | Trust one known proxy hop |
+| `CONVERSION_TIMEOUT` | 90 | Seconds before a conversion is killed |
+| `MAX_CONCURRENT_CONVERSIONS` | 2 | Conversions running at once |
+| `RATE_LIMIT_REQUESTS` / `RATE_LIMIT_WINDOW` | 60 / 600 | Per-client rate limit |
+| `MAX_IMAGE_PIXELS`, `MAX_FRAMES`, `MAX_PDF_PAGES`, `MAX_PDF_RENDER_PAGES`, `MAX_SPREADSHEET_CELLS`, `MAX_PDF_TABLE_ROWS`, `MAX_HTML_BYTES` | see `core/config.py` | Content limits |
+| `CONVERSION_ISOLATION` | process | `process` or `inline` |
+| `TRUST_PROXY` | false (true on Render) | Trust one proxy hop for client IPs |
+| `LOG_LEVEL` | INFO | Logging verbosity |
 
-## License
+## Known limitations
 
-MIT
+- No OCR: scanned PDFs convert to empty text with a note saying so.
+- DOCX → PDF and HTML → PDF approximate layout; complex designs will not match Word or a browser.
+- HEIC/HEIF is an input format only; CJK glyphs are not embedded in generated PDFs.
+- The free Render tier has a cold start of up to a minute after inactivity.
 
 ## Legal
 
-- [Terms of Service](TERMS.md)
-- [MIT License](LICENSE)
-
-Screenshots were captured from the deployed application on October 16, 2026, using synthetic example files. See the [capture notes](docs/screenshots/README.md) for coverage and verification details.
+[Terms of Service](TERMS.md) · [MIT License](LICENSE) · [Code of Conduct](CODE_OF_CONDUCT.md)

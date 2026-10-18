@@ -7,5 +7,5 @@ process and for lawful purposes.
 accuracy, or fitness for a particular purpose. Do not upload highly sensitive
 files to any hosted conversion service.
 
-Files are processed temporarily and removed after the request completes. The
-operator may limit or block abusive usage to protect the service.
+Files are processed in isolated temporary storage and deleted when the request
+completes. The operator may limit or block abusive usage to protect the service.

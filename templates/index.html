@@ -1,133 +1,233 @@
+{% macro ext_list(extensions) -%}
+{%- set aliases = {
+    "jpg": "JPG", "jpeg": "JPG",
+    "tif": "TIFF", "tiff": "TIFF",
+    "htm": "HTML", "html": "HTML",
+    "md": "MD", "markdown": "MD",
+    "heic": "HEIC", "heif": "HEIC"
+} -%}
+{%- set ns = namespace(seen=[]) -%}
+{%- for ext in extensions -%}
+    {%- set label = aliases.get(ext, ext | upper) -%}
+    {%- if label not in ns.seen -%}
+        {%- set ns.seen = ns.seen + [label] -%}
+    {%- endif -%}
+{%- endfor -%}
+{{ ns.seen | join(", ") }}
+{%- endmacro -%}
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Private, temporary image and document conversion.">
-    <title>321Convert | Private file converter</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260609-4') }}">
-    <script src="{{ url_for('static', filename='app.js', v='20260609-4') }}" defer></script>
+    <title>321Convert — Convert images, PDFs and documents privately</title>
+    <meta name="description" content="Fast conversion for images, PDFs, spreadsheets, Word, Markdown and text files. Processed in isolated temporary storage and deleted the moment your download is ready.">
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f4ee">
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#171714">
+    <meta property="og:title" content="321Convert — Convert images, PDFs and documents privately">
+    <meta property="og:description" content="Images, PDFs, spreadsheets, Word, Markdown and text. Temporary processing only — files are deleted as soon as your download is ready.">
+    <meta property="og:type" content="website">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg', v=asset_version) }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v=asset_version) }}">
+    <script nonce="{{ csp_nonce }}">
+        (function () {
+            try {
+                var stored = localStorage.getItem("theme");
+                var theme = stored === "dark" || stored === "light"
+                    ? stored
+                    : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+                document.documentElement.setAttribute("data-theme", theme);
+            } catch (error) {
+                document.documentElement.setAttribute("data-theme", "light");
+            }
+        })();
+    </script>
+    <script src="{{ url_for('static', filename='app.js', v=asset_version) }}" defer></script>
+    <script id="registry" type="application/json">{{ registry_data | tojson }}</script>
 </head>
 <body>
+    <svg hidden aria-hidden="true">
+        <defs>
+            <symbol id="i-upload" viewBox="0 0 24 24">
+                <path d="M12 16V4m0 0l-4.5 4.5M12 4l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M4 15.5v3A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5v-3" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+            </symbol>
+            <symbol id="i-file" viewBox="0 0 24 24">
+                <path d="M6 3.5h8L19 8.5V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/>
+                <path d="M13.5 3.5V9H19" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/>
+            </symbol>
+            <symbol id="i-x" viewBox="0 0 24 24">
+                <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+            </symbol>
+            <symbol id="i-download" viewBox="0 0 24 24">
+                <path d="M12 4v12m0 0l-4.5-4.5M12 16l4.5-4.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M4 15.5v3A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5v-3" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+            </symbol>
+            <symbol id="i-check" viewBox="0 0 24 24">
+                <path d="M4.5 12.5l5 5L19.5 7" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+            </symbol>
+            <symbol id="i-alert" viewBox="0 0 24 24">
+                <path d="M12 8v5m0 3.5v.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+                <path d="M10.3 4.3L3.6 16a2 2 0 0 0 1.7 3h13.4a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0z" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/>
+            </symbol>
+            <symbol id="i-retry" viewBox="0 0 24 24">
+                <path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3L19.5 9" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M19.5 4.5V9H15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+            </symbol>
+            <symbol id="i-sun" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="4.25" fill="none" stroke="currentColor" stroke-width="1.75"/>
+                <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+            </symbol>
+            <symbol id="i-moon" viewBox="0 0 24 24">
+                <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/>
+            </symbol>
+            <symbol id="i-arrow" viewBox="0 0 24 24">
+                <path d="M5 12h14m0 0l-5-5m5 5l-5 5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+            </symbol>
+            <symbol id="i-plus" viewBox="0 0 24 24">
+                <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+            </symbol>
+            <symbol id="i-info" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.75"/>
+                <path d="M12 11v5m0-8.5v-.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+            </symbol>
+        </defs>
+    </svg>
+
     <header class="site-header">
         <a class="brand" href="/" aria-label="321Convert home">
             <span class="brand-mark" aria-hidden="true">321</span>
             <span>Convert</span>
         </a>
-        <div class="header-actions">
-            <span class="privacy-status"><span aria-hidden="true"></span>Temporary processing</span>
-            <button id="themeToggle" class="theme-toggle" type="button" aria-label="Switch to dark theme" aria-pressed="false">
-                <span class="theme-half theme-light" aria-hidden="true"></span>
-                <span class="theme-half theme-dark" aria-hidden="true"></span>
-                <span class="theme-indicator" aria-hidden="true"></span>
-            </button>
-        </div>
+        <button id="themeToggle" class="icon-button" type="button" aria-label="Switch to dark theme" aria-pressed="false">
+            <svg class="icon icon-sun" aria-hidden="true"><use href="#i-sun"/></svg>
+            <svg class="icon icon-moon" aria-hidden="true" hidden><use href="#i-moon"/></svg>
+        </button>
     </header>
 
-    <main>
+    <main class="layout">
         <section class="intro">
-            <p class="overline">Instant and safe</p>
             <h1>Convert files in seconds.</h1>
-            <p class="intro-copy">Fast conversion for images and documents. Files are delivered directly and never permanently stored.</p>
-            <dl class="privacy-details">
-                <div><dt>Storage</dt><dd>Temporary only</dd></div>
-                <div><dt>Public links</dt><dd>Never</dd></div>
-                <div><dt>File limit</dt><dd>{{ max_upload_mb }} MB</dd></div>
+            <p class="lede">Images, PDFs, spreadsheets, Word, Markdown and text. Files are processed in isolated temporary storage and deleted the moment your download is ready.</p>
+            <dl class="facts">
+                <div class="fact"><dt>Storage</dt><dd>Temporary only</dd></div>
+                <div class="fact"><dt>Public links</dt><dd>Never</dd></div>
+                <div class="fact"><dt>Per file</dt><dd>{{ max_upload_mb }} MB</dd></div>
             </dl>
+            <details class="formats">
+                <summary>What you can convert</summary>
+                <ul>
+                    {% for family in registry_data.families %}
+                    <li>
+                        <span class="formats-from">{{ family.label }} <small>({{ ext_list(family.extensions) }})</small></span>
+                        <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg>
+                        <span class="formats-to">{{ family.outputs | map(attribute="label") | join(", ") }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </details>
         </section>
 
-        <section class="workspace" aria-labelledby="converterTitle">
-            <div class="workspace-header">
-                <div>
-                    <p class="section-label">Converter</p>
-                    <h2 id="converterTitle">Choose a file to get started</h2>
-                </div>
-                <p>Removed after processing.</p>
+        <section class="workspace" aria-labelledby="workspaceTitle">
+            <h2 id="workspaceTitle" class="visually-hidden">Converter</h2>
+
+            <div id="notice" class="notice" role="alert" hidden>
+                <svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg>
+                <span id="noticeText"></span>
             </div>
 
-            <div class="tabs" role="tablist" aria-label="Converter type">
-                <button class="tab active" type="button" role="tab" aria-selected="true" aria-controls="imagePanel" data-panel="imagePanel">Image</button>
-                <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="documentPanel" data-panel="documentPanel">Document</button>
-            </div>
+            <button id="dropZone" class="drop-zone" type="button" aria-describedby="dropHint">
+                <svg class="icon drop-icon" aria-hidden="true"><use href="#i-upload"/></svg>
+                <strong>Drop files here or browse</strong>
+                <span id="dropHint" class="drop-hint">Images, PDF, Word, Excel, CSV, HTML, Markdown and text · up to {{ max_upload_mb }} MB each</span>
+            </button>
+            <input id="fileInput" type="file" multiple accept="{{ registry_data.accept }}" class="visually-hidden">
 
-            <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+            <ul id="fileList" class="file-list"></ul>
 
-            <section id="imagePanel" class="panel active" role="tabpanel">
-                <form action="/convert" method="post" enctype="multipart/form-data">
-                    <label class="drop-zone" for="imageFile">
-                        <input id="imageFile" name="image" type="file" accept=".jpg,.jpeg,.png,.webp,.gif,.bmp,.tif,.tiff" required>
-                        <span class="file-symbol" aria-hidden="true"></span>
-                        <strong>Drop an image here or select a file</strong>
-                        <span class="file-name">JPG, PNG, WebP, GIF, BMP and TIFF</span>
-                    </label>
-                    <div class="form-grid">
-                        <label>Output format
-                            <select name="output_format" required>
-                                <option value="jpg">JPG</option><option value="png">PNG</option>
-                                <option value="webp">WebP</option><option value="gif">GIF</option>
-                                <option value="bmp">BMP</option><option value="tiff">TIFF</option>
-                            </select>
-                        </label>
-                        <label>Quality
-                            <input name="quality" type="number" min="1" max="100" value="82" required>
-                        </label>
+            <button id="addMore" class="add-more" type="button" hidden>
+                <svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>
+                Add more files
+            </button>
+
+            <fieldset id="options" class="options" hidden>
+                <legend>Options</legend>
+                <div class="options-grid">
+                <div class="field" id="fieldQuality" hidden>
+                    <label for="optQuality">Quality</label>
+                    <div class="field-control">
+                        <input id="optQuality" type="range" min="1" max="100" value="82">
+                        <output id="optQualityValue" for="optQuality">82</output>
                     </div>
-                    <button class="primary-button" type="submit">Convert image</button>
-                </form>
-            </section>
+                    <p class="field-help">JPG, WebP and AVIF</p>
+                </div>
+                <div class="field" id="fieldMaxDimension" hidden>
+                    <label for="optMaxDimension">Maximum dimension</label>
+                    <div class="field-control">
+                        <input id="optMaxDimension" type="number" min="16" max="10000" placeholder="Original" inputmode="numeric">
+                        <span class="field-unit">px</span>
+                    </div>
+                    <p class="field-help">Longest side; never enlarges</p>
+                </div>
+                <div class="field" id="fieldSheetName" hidden>
+                    <label for="optSheetName">Sheet name</label>
+                    <div class="field-control">
+                        <input id="optSheetName" type="text" maxlength="100" placeholder="First sheet (CSV) · All sheets (PDF)">
+                    </div>
+                </div>
+                <div class="field" id="fieldTitle" hidden>
+                    <label for="optTitle">Document title</label>
+                    <div class="field-control">
+                        <input id="optTitle" type="text" maxlength="120" placeholder="File name">
+                    </div>
+                </div>
+                </div>
+            </fieldset>
 
-            <section id="documentPanel" class="panel" role="tabpanel" hidden>
-                <form action="/document/convert" method="post" enctype="multipart/form-data">
-                    <label class="drop-zone" for="documentFile">
-                        <input id="documentFile" name="file" type="file" accept=".pdf,.xlsx,.html,.htm,.txt" required>
-                        <span class="file-symbol" aria-hidden="true"></span>
-                        <strong>Drop a document here or select a file</strong>
-                        <span class="file-name">PDF, XLSX, HTML and TXT</span>
-                    </label>
-                    <label>Conversion
-                        <select id="documentConversion" name="conversion_type" required>
-                            <option value="">Choose a conversion</option>
-                            <option value="pdf_to_docx" data-accept=".pdf">PDF to DOCX</option>
-                            <option value="excel_to_pdf" data-accept=".xlsx">XLSX to PDF</option>
-                            <option value="create_csv_from_excel" data-accept=".xlsx">XLSX to CSV</option>
-                            <option value="html_to_pdf" data-accept=".html,.htm">HTML to PDF (safe text)</option>
-                            <option value="text_to_html" data-accept=".txt">TXT to HTML</option>
-                        </select>
-                    </label>
-                    <div id="sheetOption" hidden><label>Sheet name (optional)<input name="sheet_name" type="text" maxlength="100"></label></div>
-                    <div id="titleOption" hidden><label>Document title<input name="title" type="text" maxlength="120" value="Converted Document"></label></div>
-                    <button class="primary-button" type="submit">Convert document</button>
-                </form>
-            </section>
-
-            <div id="result" class="result" aria-live="polite" hidden>
-                <div class="result-copy"><span class="result-indicator" aria-hidden="true"></span><div><strong>Conversion complete</strong><p>Your file is ready to download.</p></div></div>
-                <a id="downloadLink" class="download-button" download>Download converted file</a>
-                <div class="preview-frame"><img id="imagePreview" alt="Converted image preview" hidden></div>
+            <div class="actions">
+                <p id="summary" class="summary" aria-live="polite"></p>
+                <div class="buttons">
+                    <button id="clearAll" class="ghost-button" type="button" hidden>Clear all</button>
+                    <button id="downloadAll" class="secondary-button" type="button" hidden>
+                        <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>
+                        Download all
+                    </button>
+                    <button id="convertAll" class="primary-button" type="button" disabled>Convert</button>
+                </div>
             </div>
         </section>
     </main>
 
-    <footer>
-        <span>321Convert</span>
+    <footer class="site-footer">
+        <span class="footer-brand">321Convert <span class="version" title="Deployed version">{{ app_version }}</span></span>
         <nav aria-label="Legal and project links">
             <a href="#termsDialog" data-dialog-open="termsDialog">Terms</a>
             <a href="#licenseDialog" data-dialog-open="licenseDialog">MIT License</a>
-            <a href="https://github.com/ChardXBT/321Convert" target="_blank" rel="noopener noreferrer">Open source</a>
+            <a href="https://github.com/ChardXBT/321Convert" target="_blank" rel="noopener noreferrer">GitHub</a>
         </nav>
     </footer>
 
     <dialog id="termsDialog" class="legal-dialog" aria-labelledby="termsTitle">
-        <div class="dialog-header"><h2 id="termsTitle">Terms of Service</h2><button type="button" data-dialog-close aria-label="Close terms">Close</button></div>
+        <div class="dialog-header">
+            <h2 id="termsTitle">Terms of Service</h2>
+            <button type="button" class="icon-button" data-dialog-close aria-label="Close terms">
+                <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+            </button>
+        </div>
         <div class="dialog-content">
             <p>By using 321Convert, you agree to use it only for files you are authorized to process and for lawful purposes.</p>
             <p>The service is provided as-is without guarantees of availability, conversion accuracy, or fitness for a particular purpose. Do not upload highly sensitive files to any hosted conversion service.</p>
-            <p>Files are processed temporarily and removed after the request completes. The operator may limit or block abusive usage to protect the service.</p>
+            <p>Files are processed in isolated temporary storage and deleted when the request completes. The operator may limit or block abusive usage to protect the service.</p>
         </div>
     </dialog>
 
     <dialog id="licenseDialog" class="legal-dialog" aria-labelledby="licenseTitle">
-        <div class="dialog-header"><h2 id="licenseTitle">MIT License</h2><button type="button" data-dialog-close aria-label="Close license">Close</button></div>
+        <div class="dialog-header">
+            <h2 id="licenseTitle">MIT License</h2>
+            <button type="button" class="icon-button" data-dialog-close aria-label="Close license">
+                <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+            </button>
+        </div>
         <div class="dialog-content license-copy">
             <p>Copyright (c) 2025-2026 ChardXBT</p>
             <p>Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:</p>
