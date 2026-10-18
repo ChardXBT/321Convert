@@ -51,6 +51,9 @@ os.environ.setdefault("OMP_NUM_THREADS", "1")
 # glibc reads this when forkserver/spawn starts. Additional thread arenas can
 # reserve tens of MiB of writable space even when their resident use is small.
 os.environ.setdefault("MALLOC_ARENA_MAX", "1")
+# Keep large buffers mmap-backed so freeing them returns their writable pages
+# instead of retaining them in a dynamically growing heap under RLIMIT_DATA.
+os.environ.setdefault("MALLOC_MMAP_THRESHOLD_", "131072")
 MAX_CONCURRENT_CONVERSIONS = _int("MAX_CONCURRENT_CONVERSIONS", 2)
 BUSY_WAIT_SECONDS = _float("BUSY_WAIT_SECONDS", 20.0)
 

@@ -180,3 +180,42 @@ def test_image_to_txt_exif_rotation(client):
     response = samples.convert(client, "scan.png", buffer, "txt")
     assert response.status_code == 200
     assert "INVOICE" in _collapsed(response.data.decode("utf-8"))
+
+
+@pytest.mark.parametrize("error_kind", ["python", "onnx-alloc", "onnx-arena"])
+def test_ocr_memory_error_is_safe_and_actionable(client, monkeypatch, error_kind):
+    from onnxruntime.capi import onnxruntime_pybind11_state as ort
+    from rapidocr.inference_engine.onnxruntime.main import ONNXRuntimeError
+
+    from conversions import ocr
+
+    def failing_engine(_image):
+        if error_kind == "python":
+            raise MemoryError("synthetic-private-marker")
+        cause = (
+            ort.Fail("std::bad_alloc synthetic-private-marker")
+            if error_kind == "onnx-alloc"
+            else ort.RuntimeException("Failed to allocate memory synthetic-private-marker")
+        )
+        raise ONNXRuntimeError("synthetic-private-marker") from cause
+
+    monkeypatch.setattr(ocr, "_get_engine", lambda: failing_engine)
+    response = samples.convert(client, "scan.png", _scanned_png(), "txt")
+    assert response.status_code == 422
+    assert response.get_json()["error"] == ("The conversion needs too much memory. Try a smaller file.")
+    assert b"synthetic-private-marker" not in response.data
+
+
+def test_non_native_ocr_error_is_not_misclassified(client, monkeypatch):
+    from conversions import ocr
+
+    def failing_engine(_image):
+        raise ValueError("std::bad_alloc synthetic-private-marker")
+
+    monkeypatch.setattr(ocr, "_get_engine", lambda: failing_engine)
+    response = samples.convert(client, "scan.png", _scanned_png(), "txt")
+    assert response.status_code == 422
+    assert response.get_json()["error"] == (
+        "The file could not be converted. It may be damaged or unsupported."
+    )
+    assert b"synthetic-private-marker" not in response.data

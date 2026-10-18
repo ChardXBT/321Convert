@@ -64,6 +64,21 @@ def _model_error(exc: Exception) -> bool:
     return isinstance(exc, tuple(getattr(ort, name) for name in names if hasattr(ort, name)))
 
 
+def _memory_error(exc: Exception) -> bool:
+    """Recognize Python allocation errors and RapidOCR's wrapped native errors."""
+    cause = exc.__cause__ or exc
+    if isinstance(exc, MemoryError) or isinstance(cause, MemoryError):
+        return True
+    try:
+        from onnxruntime.capi import onnxruntime_pybind11_state as ort
+    except Exception:
+        return False
+    native_types = tuple(getattr(ort, name) for name in ("Fail", "RuntimeException") if hasattr(ort, name))
+    return isinstance(cause, native_types) and any(
+        marker in str(cause) for marker in ("std::bad_alloc", "Failed to allocate memory")
+    )
+
+
 def recognize(image) -> str:
     """OCR one PIL image; returns recognised lines joined with newlines."""
     import numpy as np
@@ -76,9 +91,9 @@ def recognize(image) -> str:
     try:
         result = engine(np.asarray(image.convert("RGB")))
     except Exception as exc:
-        # Model/session failures get the friendly message; anything else
-        # propagates so the API maps it to the generic 422.
-        if _model_error(exc):
+        if _memory_error(exc):
+            raise ConversionError("The conversion needs too much memory. Try a smaller file.") from exc
+        if _model_error(exc.__cause__ or exc):
             raise ConversionError("Text recognition is unavailable right now.") from exc
         raise
     txts = getattr(result, "txts", None)

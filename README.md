@@ -99,6 +99,9 @@ environment variable (see Deployment).
   of parser bugs and runaway allocations but are not an absolute guarantee — the OS decides
   what to kill under true memory pressure, and native parsing libraries run inside the child,
   so process isolation is a reliability boundary, not a hardened security sandbox.
+- Linux conversion workers release large temporary buffers through a fixed glibc
+  allocation threshold, keeping OCR within the memory budget without reducing resolution.
+  Native OCR allocation failures return a clear request to try a smaller file.
 - Uploads are validated by extension and content (PDF header, Office ZIP structure and
   size/path checks, text files must not contain NUL bytes, images must decode as one of the
   accepted formats). Decompression bombs are refused.

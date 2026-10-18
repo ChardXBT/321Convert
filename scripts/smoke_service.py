@@ -177,11 +177,15 @@ def smoke(base, container=None):
         check_ocr("\n".join(p.text for p in document.paragraphs).encode(), pages=2)
 
         if container:
-            # Fresh children can get different native allocator layouts.
-            # Repeat the previously intermittent PDF path without retrying or
-            # suppressing failures; every request must succeed on its first try.
-            for _ in range(6):
-                check_ocr(convert(base, "repeat.pdf", scan_pdf, "txt"), pages=2)
+            # Each request gets a fresh child; CI also varies the server's
+            # initial heap layout. Both PDF outputs must pass without retries.
+            for index in range(6):
+                target = "txt" if index % 2 == 0 else "docx"
+                result = convert(base, "repeat.pdf", scan_pdf, target)
+                if target == "docx":
+                    document = Document(io.BytesIO(result))
+                    result = "\n".join(p.text for p in document.paragraphs).encode()
+                check_ocr(result, pages=2)
 
         # Two OCR requests and an ordinary conversion arriving together must not
         # overcommit the free instance. The application serializes this work.

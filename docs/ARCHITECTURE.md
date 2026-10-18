@@ -122,6 +122,10 @@ Converters are looked up by `(family, output_ext)` in `conversions.CONVERTERS` a
   `OPENBLAS_NUM_THREADS`/`OMP_NUM_THREADS` are defaulted to 1 in `config` before any
   numerical library loads. `MALLOC_ARENA_MAX=1` is inherited by forkserver/spawn children
   to avoid additional glibc arenas reserving writable address space under the memory cap.
+  `MALLOC_MMAP_THRESHOLD_=131072` fixes glibc's large-allocation threshold at 128 KiB
+  instead of letting it grow dynamically. Large temporary buffers can then be returned
+  to the OS when freed instead of accumulating in the heap and exhausting `RLIMIT_DATA`
+  during OCR. Both settings are defaults that operators can override.
 - On `spawn` platforms one idle worker is kept pre-spawned: after each job is dispatched a
   fresh worker is started in the background (never more than one waiting), and `warm_up()`
   pre-spawns it instead of importing the heavy libraries into the web process. A dispatch
@@ -151,6 +155,10 @@ size 1, so it stays cheap on small instances. The model files are pinned in
 `on_starting` hook as a startup fallback that fails readiness if they are missing or
 corrupt) — only the model files are fetched, uploads never leave the service, and there is
 no runtime model download during requests.
+RapidOCR wraps native ONNX errors: allocation failures (`std::bad_alloc` or a failed
+memory allocation) are mapped to the same actionable memory-limit message as Python
+`MemoryError`. Raw native exceptions, paths and tracebacks are never sent to users or
+logged by this handler.
 Recognition is bounded by `OCR_MAX_PAGES` (10) and `OCR_TIME_BUDGET` (60 s wall-clock,
 checked before each page, predictive of the previous page's cost); hits below score 0.5
 are dropped and images are downscaled to a 1800 px long side before the detector sees them.
@@ -263,12 +271,15 @@ real conversions succeed before a deploy can rely on them.
 - `tests/e2e` runs Playwright against a live local server (`pytest -m e2e`), covering the full
   browser flow, mobile layout, theme persistence, dialogs and keyboard access.
 - CI (`.github/workflows/ci.yml`) runs ruff, the unit suite on Python 3.12 and 3.13, the e2e
-  suite, `pip-audit`, and a `gunicorn-smoke` job that runs the Procfile command and asserts
-  real conversions over HTTP. The smoke job additionally builds a Linux image and runs the
-  service in a 512 MiB, no-swap, 1-CPU container on a dedicated bridge network;
+  suite, `pip-audit`, and a `gunicorn-smoke` matrix that runs the Procfile command and asserts
+  real conversions over HTTP. Each smoke job builds a Linux image and runs the
+  service in a 512 MiB, no-swap, 1-CPU container on a dedicated bridge network.
+  Fresh servers use Python hash seeds `1`, `2` and `random` to vary the forkserver's
+  initial allocation layout, including a seed that reproduced the native OCR failure;
   `scripts/smoke_service.py` then exercises every family over HTTP (including serial and
-  concurrent OCR, six fresh-process scanned-PDF OCR repetitions that must each pass on the
-  first attempt, and an oversized image that must return a controlled 422) and asserts
+  concurrent OCR, six fresh-process scanned-PDF OCR repetitions alternating TXT and DOCX
+  that must each pass on the first attempt, and an oversized image that must return a
+  controlled 422) and asserts
   cgroup `oom`/`oom_kill` events stay at zero, `memory.peak` keeps at least 64 MiB of
   headroom, the gunicorn master/worker never restart, and health stays stable throughout.
   Dependabot keeps pip and Actions dependencies current.

@@ -54,6 +54,12 @@ jobs:
 
   gunicorn-smoke:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Vary the forkserver heap layout, including the seed that reproduced
+        # the native OCR allocation failure. Production keeps its random seed.
+        hash-seed: ["1", "2", "random"]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -69,6 +75,7 @@ jobs:
           docker run -d --name converter-smoke --network converter-smoke \
             --memory 512m --memory-swap 512m --cpus 1 \
             -e TRUST_PROXY=true -e MAX_CONCURRENT_CONVERSIONS=2 \
+            -e PYTHONHASHSEED="${{ matrix.hash-seed }}" \
             -e RENDER_GIT_COMMIT="${{ github.sha }}" \
             -p 127.0.0.1:8000:8000 converter-smoke
           for i in $(seq 1 60); do
