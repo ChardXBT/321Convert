@@ -48,6 +48,9 @@ CONVERSION_MEMORY_BYTES = _int("CONVERSION_MEMORY_BYTES", 256 * MIB)
 # Set before any numerical libraries load in forkserver/children.
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 os.environ.setdefault("OMP_NUM_THREADS", "1")
+# glibc reads this when forkserver/spawn starts. Additional thread arenas can
+# reserve tens of MiB of writable space even when their resident use is small.
+os.environ.setdefault("MALLOC_ARENA_MAX", "1")
 MAX_CONCURRENT_CONVERSIONS = _int("MAX_CONCURRENT_CONVERSIONS", 2)
 BUSY_WAIT_SECONDS = _float("BUSY_WAIT_SECONDS", 20.0)
 

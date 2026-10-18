@@ -120,7 +120,8 @@ Converters are looked up by `(family, output_ext)` in `conversions.CONVERTERS` a
   radius but cannot promise which process the kernel kills under true memory pressure, and
   native parsers inside the child are not a security sandbox.
   `OPENBLAS_NUM_THREADS`/`OMP_NUM_THREADS` are defaulted to 1 in `config` before any
-  numerical library loads.
+  numerical library loads. `MALLOC_ARENA_MAX=1` is inherited by forkserver/spawn children
+  to avoid additional glibc arenas reserving writable address space under the memory cap.
 - On `spawn` platforms one idle worker is kept pre-spawned: after each job is dispatched a
   fresh worker is started in the background (never more than one waiting), and `warm_up()`
   pre-spawns it instead of importing the heavy libraries into the web process. A dispatch
@@ -266,7 +267,8 @@ real conversions succeed before a deploy can rely on them.
   real conversions over HTTP. The smoke job additionally builds a Linux image and runs the
   service in a 512 MiB, no-swap, 1-CPU container on a dedicated bridge network;
   `scripts/smoke_service.py` then exercises every family over HTTP (including serial and
-  concurrent OCR and an oversized image that must return a controlled 422) and asserts
+  concurrent OCR, six fresh-process scanned-PDF OCR repetitions that must each pass on the
+  first attempt, and an oversized image that must return a controlled 422) and asserts
   cgroup `oom`/`oom_kill` events stay at zero, `memory.peak` keeps at least 64 MiB of
   headroom, the gunicorn master/worker never restart, and health stays stable throughout.
   Dependabot keeps pip and Actions dependencies current.
