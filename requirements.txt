@@ -1,6 +1,6 @@
 Flask>=3.1.1,<4
 gunicorn>=26.2.0,<27
-pillow>=12.2.0,<13
+pillow>=12.2.0,<14
 pillow-heif>=1.1.0,<2
 pypdfium2>=5.0.0,<6
 openpyxl>=3.1.5,<4
