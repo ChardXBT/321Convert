@@ -46,7 +46,7 @@ APP_VERSION = (os.getenv("RENDER_GIT_COMMIT") or "dev")[:7]
 def _asset_version() -> str:
     digest = hashlib.sha1()  # noqa: S324 -- cache-buster, not a security hash
     static = Path(__file__).parent / "static"
-    for name in ("app.js", "styles.css", "favicon.svg"):
+    for name in ("file-states.js", "app.js", "styles.css", "favicon.svg"):
         path = static / name
         if path.is_file():
             digest.update(path.read_bytes())
