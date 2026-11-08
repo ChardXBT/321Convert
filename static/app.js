@@ -226,8 +226,14 @@
         }
     };
 
+    /* A row's request carries its target, so the target is locked while the
+     * request is in flight; it unlocks once the row settles. */
+    const isInFlight = (row) =>
+        row.status === ROW_STATUS.UPLOADING || row.status === ROW_STATUS.CONVERTING;
+
     const renderRow = (row) => {
         row.elements.item.dataset.status = row.status;
+        if (row.elements.select) row.elements.select.disabled = isInFlight(row);
         row.elements.notes.textContent = row.notes.join(" ");
         row.elements.notes.hidden = row.notes.length === 0;
         row.elements.error.textContent = row.error || "";
@@ -273,6 +279,12 @@
             });
             select.value = row.target;
             select.addEventListener("change", () => {
+                if (isInFlight(row)) {
+                    // The select is disabled in flight; a change that still
+                    // arrives is ignored rather than resetting a live request.
+                    select.value = row.target;
+                    return;
+                }
                 if (row.resultUrl) {
                     URL.revokeObjectURL(row.resultUrl);
                 }
@@ -392,10 +404,18 @@
     /* convertRow never rejects: an unhandled rejection used to wedge the
      * whole converter — .then(step) never ran and state.running stayed true
      * forever. Every failure path lands the row in "error", which stays
-     * re-tryable. */
+     * re-tryable. Each call is one attempt: once it settles (done or error)
+     * any late event from its XHR is ignored, so it can neither throw nor
+     * drive a later attempt on the same row. */
     const convertRow = (row) =>
         new Promise((resolve) => {
+            let settled = false;
             const fail = (message) => {
+                if (settled) {
+                    console.debug("ignoring late failure for a settled conversion", message);
+                    return;
+                }
+                settled = true;
                 try {
                     transitionRow(row, ROW_STATUS.ERROR, {error: message});
                 } finally {
@@ -407,6 +427,10 @@
                 }
             };
             const safely = (fn) => (...args) => {
+                if (settled) {
+                    console.debug("ignoring late event for a settled conversion");
+                    return;
+                }
                 try {
                     fn(...args);
                 } catch (error) {
@@ -462,8 +486,12 @@
                             ),
                             notes,
                         });
-                        renderRow(row);
-                        resolve();
+                        settled = true;
+                        try {
+                            renderRow(row);
+                        } finally {
+                            resolve();
+                        }
                         return;
                     }
                     Promise.resolve(blob.text()).then(
