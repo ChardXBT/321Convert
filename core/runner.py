@@ -11,6 +11,7 @@ import math
 import multiprocessing
 import threading
 from dataclasses import asdict, dataclass, field
+from enum import Enum
 from pathlib import Path
 
 from core import config, resources
@@ -29,6 +30,56 @@ class ConversionResult:
     path: str
     extension: str
     notes: list[str] = field(default_factory=list)
+
+
+class _WorkerOutcome(Enum):
+    """The three things a child can report back over the result pipe."""
+
+    SUCCESS = "success"
+    USER_ERROR = "user_error"
+    CRASH = "crash"
+
+
+@dataclass(frozen=True)
+class _WorkerResult:
+    """A decoded child message: only the fields of `outcome` are meaningful."""
+
+    outcome: _WorkerOutcome
+    result: dict | None = None
+    user_message: str | None = None
+    error_type: str | None = None
+
+
+def _decode_message(message) -> _WorkerResult:
+    """Map the child's wire dict to a declared outcome.
+
+    The child sends ``{"ok": bool}`` plus ``result`` / ``user_message`` /
+    ``error_type``. Anything outside that vocabulary is a crash, never a
+    KeyError/TypeError escaping into the request handler.
+    """
+    if not isinstance(message, dict) or not isinstance(message.get("ok"), bool):
+        raise ConversionCrashed("BadMessage")
+    if message["ok"]:
+        result = message.get("result")
+        if (
+            not isinstance(result, dict)
+            or not isinstance(result.get("path"), str)
+            or not isinstance(result.get("extension"), str)
+        ):
+            raise ConversionCrashed("BadMessage")
+        return _WorkerResult(_WorkerOutcome.SUCCESS, result=result)
+    user_message = message.get("user_message")
+    error_type = message.get("error_type")
+    if user_message:
+        return _WorkerResult(
+            _WorkerOutcome.USER_ERROR,
+            user_message=str(user_message),
+            error_type=str(error_type) if error_type else None,
+        )
+    return _WorkerResult(
+        _WorkerOutcome.CRASH,
+        error_type=str(error_type) if error_type else "UnknownError",
+    )
 
 
 _SEMAPHORE = threading.BoundedSemaphore(resources.concurrency_limit())
@@ -251,18 +302,23 @@ def _run_process(family_id, output_ext, input_path, output_path, options):
             raise ConversionTimeout()
         proc.join(10)
         # The finalizer always kills lingering children, including after result.
-        if not isinstance(message, dict) or "ok" not in message:
-            raise ConversionCrashed("BadMessage")
-        if message["ok"]:
-            result = message["result"]
-            return ConversionResult(
-                path=result["path"],
-                extension=result["extension"],
-                notes=list(result.get("notes") or []),
-            )
-        if message.get("user_message"):
-            raise ConversionError(message["user_message"])
-        raise ConversionCrashed(message.get("error_type") or "UnknownError")
+        decoded = _decode_message(message)
+        match decoded.outcome:
+            case _WorkerOutcome.SUCCESS:
+                result = decoded.result
+                return ConversionResult(
+                    path=result["path"],
+                    extension=result["extension"],
+                    notes=list(result.get("notes") or []),
+                )
+            case _WorkerOutcome.USER_ERROR:
+                if decoded.error_type:
+                    logger.warning("child conversion error error_type=%s", decoded.error_type)
+                raise ConversionError(decoded.user_message)
+            case _WorkerOutcome.CRASH:
+                raise ConversionCrashed(decoded.error_type or "UnknownError")
+            case _:  # pragma: no cover - the enum is closed
+                raise ConversionCrashed("BadMessage")
     finally:
         _close_worker(worker)
         if worker.proc.is_alive():

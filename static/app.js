@@ -87,10 +87,13 @@
             optionAppliesTo(REGISTRY.options[id], row.family.id, row.target),
         );
 
-    const convertibleRows = () => state.rows.filter((row) => row.status !== "unsupported");
+    const convertibleRows = () =>
+        state.rows.filter((row) => row.status !== ROW_STATUS.UNSUPPORTED);
 
     const pendingRows = () =>
-        state.rows.filter((row) => row.status === "ready" || row.status === "error");
+        state.rows.filter(
+            (row) => row.status === ROW_STATUS.READY || row.status === ROW_STATUS.ERROR,
+        );
 
     /* --- notice / summary / buttons ------------------------------------------ */
 
@@ -110,10 +113,10 @@
         } else if (state.rows.length) {
             const parts = [];
             const count = (status) => state.rows.filter((r) => r.status === status).length;
-            const ready = count("ready");
-            const done = count("done");
-            const failed = count("error");
-            const unsupported = count("unsupported");
+            const ready = count(ROW_STATUS.READY);
+            const done = count(ROW_STATUS.DONE);
+            const failed = count(ROW_STATUS.ERROR);
+            const unsupported = count(ROW_STATUS.UNSUPPORTED);
             if (ready) parts.push(ready === 1 ? "1 file ready" : `${ready} files ready`);
             if (done) parts.push(`${done} converted`);
             if (failed) parts.push(`${failed} failed`);
@@ -131,7 +134,7 @@
               : "Convert";
         elements.clearAll.hidden = state.rows.length === 0;
         elements.downloadAll.hidden =
-            state.rows.filter((r) => r.status === "done").length < 2;
+            state.rows.filter((r) => r.status === ROW_STATUS.DONE).length < 2;
         document
             .querySelectorAll(".file-row[data-status='error'] .retry-button")
             .forEach((button) => {
@@ -168,43 +171,58 @@
     const statusContent = (row) => {
         const box = row.elements.status;
         box.replaceChildren();
-        if (row.status === "uploading") {
-            const progress = el("div", "progress");
-            progress.setAttribute("role", "progressbar");
-            progress.setAttribute("aria-valuenow", String(row.progress));
-            const bar = el("span", "bar");
-            bar.style.width = `${row.progress}%`;
-            progress.appendChild(bar);
-            box.appendChild(progress);
-            box.appendChild(el("span", "status-text", `Uploading ${row.progress}%`));
-        } else if (row.status === "converting") {
-            const indeterminate = el("div", "progress indeterminate");
-            indeterminate.appendChild(el("span", "bar"));
-            box.appendChild(indeterminate);
-            box.appendChild(el("span", "status-text", "Converting…"));
-        } else if (row.status === "done") {
-            const link = el("a", "download-button");
-            link.href = row.resultUrl;
-            link.setAttribute("download", row.resultName);
-            link.appendChild(icon("i-download"));
-            link.appendChild(document.createTextNode("Download"));
-            box.appendChild(link);
-        } else if (row.status === "error") {
-            const retry = el("button", "retry-button");
-            retry.type = "button";
-            retry.disabled = state.running;
-            retry.appendChild(icon("i-retry"));
-            retry.appendChild(document.createTextNode("Retry"));
-            retry.addEventListener("click", () => {
-                if (state.running) return;
-                state.running = true;
-                updateSummary();
-                convertRow(row).then(() => {
-                    state.running = false;
+        switch (row.status) {
+            case ROW_STATUS.UPLOADING: {
+                const progress = el("div", "progress");
+                progress.setAttribute("role", "progressbar");
+                progress.setAttribute("aria-valuenow", String(row.progress));
+                const bar = el("span", "bar");
+                bar.style.width = `${row.progress}%`;
+                progress.appendChild(bar);
+                box.appendChild(progress);
+                box.appendChild(el("span", "status-text", `Uploading ${row.progress}%`));
+                break;
+            }
+            case ROW_STATUS.CONVERTING: {
+                const indeterminate = el("div", "progress indeterminate");
+                indeterminate.appendChild(el("span", "bar"));
+                box.appendChild(indeterminate);
+                box.appendChild(el("span", "status-text", "Converting…"));
+                break;
+            }
+            case ROW_STATUS.DONE: {
+                const link = el("a", "download-button");
+                link.href = row.resultUrl;
+                link.setAttribute("download", row.resultName);
+                link.appendChild(icon("i-download"));
+                link.appendChild(document.createTextNode("Download"));
+                box.appendChild(link);
+                break;
+            }
+            case ROW_STATUS.ERROR: {
+                const retry = el("button", "retry-button");
+                retry.type = "button";
+                retry.disabled = state.running;
+                retry.appendChild(icon("i-retry"));
+                retry.appendChild(document.createTextNode("Retry"));
+                retry.addEventListener("click", () => {
+                    if (state.running) return;
+                    state.running = true;
                     updateSummary();
+                    const finish = () => {
+                        state.running = false;
+                        updateSummary();
+                    };
+                    convertRow(row).then(finish, finish);
                 });
-            });
-            box.appendChild(retry);
+                box.appendChild(retry);
+                break;
+            }
+            case ROW_STATUS.READY:
+            case ROW_STATUS.UNSUPPORTED:
+                break;
+            default:
+                throw new Error(`cannot render unknown file status "${String(row.status)}"`);
         }
     };
 
@@ -257,13 +275,10 @@
             select.addEventListener("change", () => {
                 if (row.resultUrl) {
                     URL.revokeObjectURL(row.resultUrl);
-                    row.resultUrl = null;
                 }
                 row.target = select.value;
                 lastTarget[row.family.id] = select.value;
-                row.status = "ready";
-                row.error = "";
-                row.notes = [];
+                transitionRow(row, ROW_STATUS.READY);
                 updateOptions();
                 updateSummary();
                 renderRow(row);
@@ -322,34 +337,28 @@
 
             const ext = extOf(file.name);
             const family = familyFor(ext);
-            const row = {
+            const oversized = file.size > MAX_BYTES;
+            const reason = oversized
+                ? `Larger than ${REGISTRY.max_upload_mb} MB.`
+                : family
+                  ? ""
+                  : `.${ext || "?"} files can't be converted here.`;
+            const row = newFileRow({
                 id: nextId++,
                 file,
                 ext,
-                family,
+                family: reason ? null : family,
                 target: family ? defaultTarget(family, ext) : "",
-                status: "ready",
-                progress: 0,
-                resultUrl: null,
-                resultName: "",
-                notes: [],
-                error: "",
-                badge: ext ? ext.toUpperCase().slice(0, 5) : "?",
-                meta: family
-                    ? `${formatBytes(file.size)} · ${family.label}`
-                    : "Unsupported file type",
+                status: reason ? ROW_STATUS.UNSUPPORTED : ROW_STATUS.READY,
+                error: reason,
+                badge: !family ? "?" : ext ? ext.toUpperCase().slice(0, 5) : "?",
+                meta: oversized
+                    ? `${formatBytes(file.size)} · Unsupported file type`
+                    : family
+                      ? `${formatBytes(file.size)} · ${family.label}`
+                      : "Unsupported file type",
                 elements: {},
-            };
-            if (file.size > MAX_BYTES) {
-                row.family = null;
-                row.status = "unsupported";
-                row.error = `Larger than ${REGISTRY.max_upload_mb} MB.`;
-                row.meta = `${formatBytes(file.size)} · Unsupported file type`;
-            } else if (!family) {
-                row.status = "unsupported";
-                row.badge = "?";
-                row.error = `.${ext || "?"} files can't be converted here.`;
-            }
+            });
             state.rows.push(row);
             elements.fileList.appendChild(buildRow(row));
             added = true;
@@ -380,84 +389,111 @@
         return plain ? plain[1] : fallback;
     };
 
+    /* convertRow never rejects: an unhandled rejection used to wedge the
+     * whole converter — .then(step) never ran and state.running stayed true
+     * forever. Every failure path lands the row in "error", which stays
+     * re-tryable. */
     const convertRow = (row) =>
         new Promise((resolve) => {
-            row.status = "uploading";
-            row.progress = 0;
-            row.error = "";
-            row.notes = [];
-            renderRow(row);
-
-            const data = new FormData();
-            data.append("file", row.file);
-            data.append("target", row.target);
-            optionsForRow(row).forEach((id) => {
-                const input = elements.inputs[id];
-                if (input && input.value !== "") data.append(id, input.value);
-            });
-
-            const xhr = new XMLHttpRequest();
-            xhr.open("POST", "/api/convert");
-            xhr.responseType = "blob";
-            xhr.timeout = 180000;
-
-            xhr.upload.onprogress = (event) => {
-                if (!event.lengthComputable) return;
-                row.progress = Math.max(1, Math.round((event.loaded / event.total) * 100));
-                if (event.loaded >= event.total) row.status = "converting";
-                renderRow(row);
-            };
-            xhr.upload.onload = () => {
-                row.status = "converting";
-                renderRow(row);
-            };
-
-            xhr.onload = () => {
-                const blob = xhr.response;
-                if (xhr.status === 200) {
-                    if (row.resultUrl) URL.revokeObjectURL(row.resultUrl);
-                    row.resultUrl = URL.createObjectURL(blob);
-                    row.resultName = downloadName(xhr, `${stemOf(row.file.name)}.${row.target}`);
+            const fail = (message) => {
+                try {
+                    transitionRow(row, ROW_STATUS.ERROR, {error: message});
+                } finally {
                     try {
-                        row.notes = JSON.parse(xhr.getResponseHeader("X-Conversion-Notes") || "[]");
-                    } catch (error) {
-                        row.notes = [];
+                        renderRow(row);
+                    } finally {
+                        resolve();
                     }
-                    row.status = "done";
-                    renderRow(row);
-                    resolve();
-                    return;
                 }
-                Promise.resolve(blob.text()).then((text) => {
-                    let message = `Conversion failed (HTTP ${xhr.status}).`;
-                    try {
-                        const parsed = JSON.parse(text);
-                        if (parsed && parsed.error) message = parsed.error;
-                    } catch (error) {
-                        /* keep generic message */
-                    }
-                    row.error = message;
-                    row.status = "error";
-                    if (xhr.status === 429 || xhr.status === 503) showNotice(message);
-                    renderRow(row);
-                    resolve();
+            };
+            const safely = (fn) => (...args) => {
+                try {
+                    fn(...args);
+                } catch (error) {
+                    console.error("conversion step failed", error);
+                    fail("The conversion could not be completed. Try again.");
+                }
+            };
+            try {
+                transitionRow(row, ROW_STATUS.UPLOADING);
+                renderRow(row);
+
+                const data = new FormData();
+                data.append("file", row.file);
+                data.append("target", row.target);
+                optionsForRow(row).forEach((id) => {
+                    const input = elements.inputs[id];
+                    if (input && input.value !== "") data.append(id, input.value);
                 });
-            };
 
-            xhr.onerror = () => {
-                row.error = "Couldn't reach the server. Check your connection and try again.";
-                row.status = "error";
-                renderRow(row);
-                resolve();
-            };
-            xhr.ontimeout = () => {
-                row.error = "The conversion timed out.";
-                row.status = "error";
-                renderRow(row);
-                resolve();
-            };
+                const xhr = new XMLHttpRequest();
+                xhr.open("POST", "/api/convert");
+                xhr.responseType = "blob";
+                xhr.timeout = 180000;
 
-            xhr.send(data);
+                xhr.upload.onprogress = safely((event) => {
+                    if (!event.lengthComputable) return;
+                    row.progress = Math.max(1, Math.round((event.loaded / event.total) * 100));
+                    if (event.loaded >= event.total) transitionRow(row, ROW_STATUS.CONVERTING);
+                    renderRow(row);
+                });
+                xhr.upload.onload = safely(() => {
+                    transitionRow(row, ROW_STATUS.CONVERTING);
+                    renderRow(row);
+                });
+
+                xhr.onload = safely(() => {
+                    const blob = xhr.response;
+                    if (xhr.status === 200) {
+                        if (row.resultUrl) URL.revokeObjectURL(row.resultUrl);
+                        let notes = [];
+                        try {
+                            notes = JSON.parse(
+                                xhr.getResponseHeader("X-Conversion-Notes") || "[]",
+                            );
+                        } catch (error) {
+                            notes = [];
+                        }
+                        transitionRow(row, ROW_STATUS.DONE, {
+                            resultUrl: URL.createObjectURL(blob),
+                            resultName: downloadName(
+                                xhr,
+                                `${stemOf(row.file.name)}.${row.target}`,
+                            ),
+                            notes,
+                        });
+                        renderRow(row);
+                        resolve();
+                        return;
+                    }
+                    Promise.resolve(blob.text()).then(
+                        safely((text) => {
+                            let message = `Conversion failed (HTTP ${xhr.status}).`;
+                            try {
+                                const parsed = JSON.parse(text);
+                                if (parsed && parsed.error) message = parsed.error;
+                            } catch (error) {
+                                /* keep generic message */
+                            }
+                            if (xhr.status === 429 || xhr.status === 503) showNotice(message);
+                            fail(message);
+                        }),
+                        () => fail(`Conversion failed (HTTP ${xhr.status}).`),
+                    );
+                });
+
+                xhr.onerror = safely(() => {
+                    fail("Couldn't reach the server. Check your connection and try again.");
+                });
+                xhr.ontimeout = safely(() => {
+                    fail("The conversion timed out.");
+                });
+
+                xhr.send(data);
+            } catch (error) {
+                console.error("conversion could not start", error);
+                fail("The conversion could not be started. Try again.");
+            }
         });
 
     const convertAll = () => {
@@ -488,7 +524,10 @@
             }
             index += 1;
             updateSummary(index, queue.length);
-            convertRow(queue[index - 1]).then(step);
+            /* convertRow resolves even when its row fails (the row lands in
+             * "error"); the second step still guards the queue if that ever
+             * regressed, so state.running can never stay true. */
+            convertRow(queue[index - 1]).then(step, step);
         };
         step();
     };
@@ -539,7 +578,7 @@
 
     elements.downloadAll.addEventListener("click", () => {
         const links = state.rows
-            .filter((row) => row.status === "done")
+            .filter((row) => row.status === ROW_STATUS.DONE)
             .map((row) => row.elements.status.querySelector("a.download-button"));
         links.forEach((link, index) => {
             setTimeout(() => {
