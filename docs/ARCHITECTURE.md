@@ -250,7 +250,7 @@ Plain ES2020, no build step, CSP-compatible (no inline handlers, no `innerHTML` 
 
 ## Deployment
 
-Render runs `gunicorn` 26.x from `render.yaml`/`Procfile` with one worker and a few threads;
+Render runs `gunicorn` 27.x from `render.yaml`/`Procfile` with one worker and a few threads;
 the worker is mostly waiting on child processes, so threads are cheap. `--timeout` is longer
 than `CONVERSION_TIMEOUT` plus upload time. Health checks hit `/health`. No secrets are
 needed. The Blueprint sets `MAX_CONCURRENT_CONVERSIONS=1` and `CONVERSION_MEMORY_BYTES`
