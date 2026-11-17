@@ -29,8 +29,10 @@ Several files can be queued at once; each is converted in turn and downloaded in
 
 ### Images
 
-- EXIF orientation is applied, then all other metadata (location, device) is dropped.
-  Embedded colour profiles are kept when the output format supports them.
+- EXIF orientation is applied, then all other metadata — EXIF, XMP (location, device) and
+  comments — is dropped for every output format. Embedded colour profiles are kept when the
+  output format supports them and the output stays in the profile's colour space (a
+  grayscale profile is not attached to an image written as RGB).
 - Transparency is preserved for PNG, WebP, GIF, TIFF, AVIF and ICO; it is flattened onto
   white for JPG and PDF.
 - Animated GIF/WebP and multi-page TIFF keep all frames when the output is GIF, WebP, TIFF or
@@ -50,11 +52,14 @@ Several files can be queued at once; each is converted in turn and downloaded in
   file; the response notes which pages were recognised. **PDF → PNG/JPG** rasterises pages at
   144 DPI; multi-page PDFs return a ZIP with one image per page. Password-protected PDFs are
   refused with a clear message.
-- **XLSX → CSV** exports one worksheet (the first, or the one you name) as UTF-8 with BOM so
+- **XLSX → CSV** exports one worksheet (the first, or the one you name; chart sheets are
+  skipped) as UTF-8 with BOM so
   Excel opens it correctly; dates become ISO 8601 and formula-looking text is escaped to
   prevent spreadsheet formula injection. **XLSX → PDF** renders every worksheet (or a named one)
   as a table. **CSV → XLSX** detects the delimiter, converts numeric fields to numbers and stores
-  everything else as literal text.
+  everything else as literal text. Values that would change as numbers — codes with leading
+  zeros such as `00501`, and numbers with more than Excel's 15 significant digits such as
+  card or account numbers — are kept as text.
 - **DOCX → PDF/HTML/TXT** preserves headings, paragraphs, alignment, indents and spacing,
   font sizes and colours, highlights, super/subscript, bold/italic/underline, bulleted and
   numbered lists, tables (widths, shading, merged cells), hyperlinks, page breaks, page size
@@ -129,8 +134,8 @@ GET  /health                 → {"status": "ok", "version": "<git sha>"}
 A successful `POST /api/convert` returns the converted file as an attachment with
 `Content-Disposition` (UTF-8 filename) and an `X-Conversion-Notes` header holding a JSON list
 of short notes such as `"Transparent areas were flattened to white."`. Errors are JSON:
-`{"success": false, "error": "…"}` with status 400 (bad request), 413 (too large), 422
-(could not convert), 429 (rate limited), 503 (busy) or 504 (timed out).
+`{"success": false, "error": "…"}` with status 400 (bad request), 403 (cross-origin POST),
+413 (too large), 422 (could not convert), 429 (rate limited), 503 (busy) or 504 (timed out).
 
 ```sh
 curl -F file=@photo.heic -F target=jpg -F quality=85 https://three21convert.onrender.com/api/convert -o photo.jpg

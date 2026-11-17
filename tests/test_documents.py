@@ -1,6 +1,7 @@
 import io
 import socket
 
+import pytest
 from pypdf import PdfReader
 
 from core import config
@@ -234,6 +235,43 @@ def test_docx_fidelity_html(client):
     assert 'width="144"' in body
     assert "<ol" in body and "<li" in body
     assert "HEADER TEXT" in body
+
+
+def _docx_with_cell_fill(fill: str) -> io.BytesIO:
+    from docx import Document
+    from docx.oxml.ns import qn
+
+    document = Document()
+    cell = document.add_table(rows=1, cols=1).cell(0, 0)
+    cell.text = "cell text"
+    tc_pr = cell._tc.get_or_add_tcPr()
+    tc_pr.append(tc_pr.makeelement(qn("w:shd"), {qn("w:val"): "clear", qn("w:fill"): fill}))
+    buffer = io.BytesIO()
+    document.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+
+@pytest.mark.parametrize("target", ["html", "pdf"])
+def test_docx_cell_fill_cannot_inject_markup(client, target):
+    # w:fill is raw XML text from the upload. It used to be pasted into a
+    # style attribute unescaped, so a crafted .docx produced HTML with a live
+    # <script> (and broken markup for the PDF renderer).
+    payload = 'fff"><script>alert(1)</script><b x="'
+    response = samples.convert(client, "x.docx", _docx_with_cell_fill(payload), target)
+    assert response.status_code == 200
+    if target == "html":
+        body = response.data.decode()
+        assert "<script" not in body
+        assert "alert(1)" not in body
+        assert "cell text" in body
+
+
+@pytest.mark.parametrize("fill", ["auto", "#FF8800x", "red", "12345", "ff8800;color:red"])
+def test_docx_cell_fill_only_hex_colours_kept(client, fill):
+    response = samples.convert(client, "x.docx", _docx_with_cell_fill(fill), "html")
+    assert response.status_code == 200
+    assert "background:" not in response.data.decode().split("<body>", 1)[1]
 
 
 def test_docx_page_css_landscape():

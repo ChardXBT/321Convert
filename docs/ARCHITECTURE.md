@@ -27,9 +27,12 @@ conversions/
                         locked-down resource policy
   fonts/                Bundled TTFs + licenses: DejaVu Sans, Droid Sans Fallback (CJK), Noto Sans KR (Hangul)
 gunicorn.conf.py        Gunicorn on_starting hook: verifies/prepares OCR models before accepting traffic
-static/                 app.js, styles.css, favicon.svg (no framework, no build step)
+static/                 file-states.js (per-file state machine), app.js, styles.css, favicon.svg
+                        (no framework, no build step)
 templates/index.html    Single page; the registry is embedded as JSON for the UI
-tests/                  pytest suite; tests/e2e holds Playwright browser tests
+tests/                  pytest suite; tests/e2e holds Playwright browser tests, tests/js the Node
+                        frontend tests (run from tests/test_frontend_js.py)
+docs/specs/             Specs for features that are not built yet
 ```
 
 ## Request flow
@@ -85,7 +88,7 @@ Options are declared once and attached by family and/or output:
 | --- | --- | --- | --- |
 | `quality` | int 1–100 | 82 | output is jpg, webp, avif or heic |
 | `max_dimension` | int 16–10000 px, optional | none | family is `image` (longest side; never upscales) |
-| `sheet_name` | str ≤ 100 chars, optional | first sheet (csv) / all sheets (pdf) | family is `spreadsheet` |
+| `sheet_name` | str ≤ 100 chars, optional | first worksheet (csv) / all worksheets (pdf); chart sheets are skipped | family is `spreadsheet` |
 | `title` | str ≤ 120 chars, optional | source filename | family is `text` or `markdown` and output is html |
 
 `registry.describe()` returns the JSON the UI and `GET /api/formats` use:
@@ -139,6 +142,13 @@ Converters are looked up by `(family, output_ext)` in `conversions.CONVERTERS` a
 - Documents: `MAX_PDF_PAGES` (text extraction), `MAX_PDF_RENDER_PAGES` (rasterising),
   `MAX_SPREADSHEET_CELLS`, `MAX_PDF_TABLE_ROWS`, `MAX_HTML_BYTES`, `MAX_EMBEDDED_IMAGE_BYTES`,
   `MAX_CSS_BYTES` (author stylesheets).
+- Office uploads are checked as ZIP archives before parsing: member count, total uncompressed
+  size, path traversal, and the presence of `[Content_Types].xml` plus `xl/workbook.xml` or
+  `word/document.xml`.
+- Image metadata: every frame's EXIF, XMP, comment and ICC profile are removed before
+  saving (some writers, notably pillow-heif, would otherwise re-embed them on their own);
+  the source ICC profile is then passed explicitly only when its colour space matches the
+  output frame's mode.
 
 ## OCR (`conversions/ocr.py`)
 
@@ -162,10 +172,8 @@ logged by this handler.
 Recognition is bounded by `OCR_MAX_PAGES` (10) and `OCR_TIME_BUDGET` (60 s wall-clock,
 checked before each page, predictive of the previous page's cost); hits below score 0.5
 are dropped and images are downscaled to a 1800 px long side before the detector sees them.
-Notes tell the user when text was OCR'd and when OCR stopped early.
-- Office uploads are checked as ZIP archives before parsing: member count, total uncompressed
-  size, path traversal, and the presence of `[Content_Types].xml` plus `xl/workbook.xml` or
-  `word/document.xml`.
+Notes name the pages whose text came from OCR and say when, and why (page cap or time
+budget), OCR stopped early.
 
 ## PDF generation (`conversions/pdf_render.py`)
 
@@ -207,9 +215,12 @@ resources or override bundled fonts. The result is capped at `MAX_CSS_BYTES`.
 
 ### DOCX fidelity
 
+`docx -> html` output is built from escaped text and validated values rather than sanitised
+afterwards, so every attribute value must be escaped or come from a closed set.
 `docx -> pdf/html` maps the document's own formatting onto inline styles: paragraph
 alignment, indents, spacing and line-height; run size, colour, highlight, caps and
-super/subscript; table cell widths, shading, vertical alignment, colspans and rowspans;
+super/subscript; table cell widths, shading (only 6-digit hex `w:fill` values — the raw
+attribute never reaches the output), vertical alignment, colspans and rowspans;
 embedded images at their declared size (capped to the printable width); numbered list types
 read from the numbering part; the first section's page size/orientation/margins (`@page`,
 PDF only) and its header/footer text emitted once as muted blocks.

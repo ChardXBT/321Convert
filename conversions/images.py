@@ -18,6 +18,42 @@ _ICC_OUTPUTS = {"jpg", "png", "webp", "avif", "tiff", "heic"}
 _UNREADABLE = "The image could not be read. It may be damaged or not a supported image."
 
 
+# Frame metadata that some writers copy from ``image.info`` on their own:
+# pillow-heif re-embeds EXIF/XMP (camera, GPS), JPEG/GIF re-write comments,
+# PNG/TIFF/AVIF fall back to the frame's ICC profile.
+_METADATA_KEYS = ("exif", "xmp", "XML:com.adobe.xmp", "Raw profile type exif", "icc_profile", "comment")
+
+
+def _strip_metadata(frame):
+    """Remove every piece of source metadata a writer could pick up itself.
+
+    The output's metadata is then exactly what ``convert`` passes explicitly
+    (a matching ICC profile at most).
+    """
+    for key in _METADATA_KEYS:
+        frame.info.pop(key, None)
+    frame.getexif().clear()
+    return frame
+
+
+def _profile_fits(profile, mode: str) -> bool:
+    """True when an ICC profile describes the colour space of *mode*.
+
+    A grayscale source converted to RGB (WebP/AVIF/HEIC, or JPG after
+    flattening alpha) must not carry its GRAY profile: an RGB image tagged
+    with a gray profile is invalid and colour-managed viewers reject or
+    ignore it. Bytes 16-19 of the ICC header name the data colour space.
+    """
+    if not profile or len(profile) < 20:
+        return False
+    space = bytes(profile[16:20])
+    if mode in {"RGB", "RGBA"}:
+        return space == b"RGB "
+    if mode in {"L", "LA"} or mode.startswith("I;16"):
+        return space == b"GRAY"
+    return False
+
+
 def _has_alpha(image) -> bool:
     return image.mode in _ALPHA_MODES or (image.mode == "P" and "transparency" in image.info)
 
@@ -185,13 +221,14 @@ def convert(input_path: Path, output_path: Path, options: dict) -> ConversionRes
                 frame.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
                 if index == 0:
                     notes.append(f"Resized to {frame.width}x{frame.height}.")
-            frames.append(_normalise(frame, ext, notes))
+            frames.append(_strip_metadata(_normalise(frame, ext, notes)))
 
         first = frames[0]
         save_kwargs = {}
-        if ext in _ICC_OUTPUTS and image.mode in _ICC_SOURCE_MODES and image.info.get("icc_profile"):
-            save_kwargs["icc_profile"] = image.info["icc_profile"]
-        # EXIF is never copied: it can carry location and device data.
+        profile = image.info.get("icc_profile")
+        if ext in _ICC_OUTPUTS and image.mode in _ICC_SOURCE_MODES and _profile_fits(profile, first.mode):
+            save_kwargs["icc_profile"] = profile
+        # EXIF/XMP are never copied (see _strip_metadata): they can carry location and device data.
 
         if ext == "pdf":
             _save_pdf(frames, output_path, stem)

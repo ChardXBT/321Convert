@@ -38,6 +38,38 @@ def test_sheet_name_selects_second_sheet(client):
     assert b"two" in response.data and b"one" not in response.data
 
 
+def test_default_csv_sheet_is_first_not_active(client):
+    # Documented default is the first sheet; the tab that happened to be
+    # selected when the file was saved must not change the result.
+    response = samples.convert(client, "a.xlsx", samples.xlsx_active_second_sheet(), "csv")
+    assert response.status_code == 200
+    assert response.data.decode("utf-8-sig").strip() == "one"
+
+
+def test_chart_sheet_first_still_converts_to_csv(client):
+    # Used to crash with AttributeError (Chartsheet has no iter_rows) and a
+    # generic "could not be converted" 422 for a perfectly valid workbook.
+    response = samples.convert(client, "c.xlsx", samples.xlsx_chart_sheet_first(), "csv")
+    assert response.status_code == 200
+    assert response.data.decode("utf-8-sig").split() == ["k", "one", "2"]
+
+
+def test_chart_sheet_by_name_is_a_clear_422(client):
+    for target in ("csv", "pdf"):
+        response = samples.convert(
+            client, "c.xlsx", samples.xlsx_chart_sheet_first(), target, sheet_name="Chart"
+        )
+        assert response.status_code == 422, target
+        assert "chart sheet" in response.json["error"]
+
+
+def test_chart_sheet_skipped_in_pdf(client):
+    response = samples.convert(client, "c.xlsx", samples.xlsx_chart_sheet_first(), "pdf")
+    assert response.status_code == 200
+    text = "".join(page.extract_text() or "" for page in PdfReader(io.BytesIO(response.data)).pages)
+    assert "Data" in text and "one" in text
+
+
 def test_missing_sheet_name_422(client):
     response = samples.convert(client, "two.xlsx", samples.xlsx_two_sheets(), "csv", sheet_name="Nope")
     assert response.status_code == 422
@@ -101,6 +133,21 @@ def test_csv_to_xlsx_types_and_formula_safety(client):
     assert sheet["B2"].value == 2.5 and isinstance(sheet["B2"].value, float)
     formula_cell = sheet["B3"]
     assert formula_cell.value == "=1+1" and formula_cell.data_type == "s"
+
+
+def test_csv_to_xlsx_keeps_codes_and_long_numbers_exact(client):
+    # These used to become 501, 1.2345678901234568e+18, ... : leading zeros
+    # dropped and digits beyond Excel's 15 rounded away.
+    data = io.BytesIO(
+        b"zip,id,card,neg,small,exact,zero,frac,trail\r\n"
+        b"00501,1234567890123456789,4111111111111111,-0042,0.5,123456789012345,0,1.25,2.500\r\n"
+    )
+    response = samples.convert(client, "n.csv", data, "xlsx")
+    assert response.status_code == 200
+    row = [cell.value for cell in load_workbook(io.BytesIO(response.data)).active[2]]
+    assert row[:4] == ["00501", "1234567890123456789", "4111111111111111", "-0042"]
+    assert row[4:] == [0.5, 123456789012345, 0, 1.25, 2.5]
+    assert isinstance(row[5], int) and isinstance(row[8], float)
 
 
 def test_csv_quoted_newline_survives(client):

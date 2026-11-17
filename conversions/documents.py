@@ -42,6 +42,8 @@ _HIGHLIGHT_CSS = {
     "GRAY_25": "#c0c0c0",
 }
 _LIST_TYPES = {"lowerLetter": "a", "upperLetter": "A", "lowerRoman": "i", "upperRoman": "I"}
+# ST_HexColor: the only shape a cell fill may take before it reaches a style.
+_HEX_COLOR = re.compile(r"[0-9A-Fa-f]{6}")
 
 
 def _run_html(run) -> str:
@@ -120,7 +122,9 @@ def _paragraph_style(paragraph) -> str:
 
 
 def _attr(style: str) -> str:
-    return f' style="{style}"' if style else ""
+    # Escaped as well as built from validated values: a style attribute must
+    # never be able to close itself, whatever a future caller passes in.
+    return f' style="{html.escape(style, quote=True)}"' if style else ""
 
 
 def _link_ok(url: str) -> bool:
@@ -216,9 +220,11 @@ def _cell_style(cell) -> str:
     if tc_pr is not None:
         shd = tc_pr.find(qn("w:shd"))
         if shd is not None:
-            fill = shd.get(qn("w:fill"))
-            if fill and fill.lower() != "auto":
-                styles.append(f"background:#{fill.lstrip('#').lower()}")
+            fill = (shd.get(qn("w:fill")) or "").lstrip("#")
+            # The attribute is raw XML text from the upload; anything other
+            # than a 6-digit hex colour ("auto" included) is ignored.
+            if _HEX_COLOR.fullmatch(fill):
+                styles.append(f"background:#{fill.lower()}")
         v_align = tc_pr.find(qn("w:vAlign"))
         if v_align is not None:
             value = v_align.get(qn("w:val"))
