@@ -86,7 +86,27 @@ def test_ocr_page_cap(client, monkeypatch):
     notes = _notes(response)
     assert "INVOICE" in text
     assert any("stopped after 1 page(s)" in note for note in notes)
-    assert any("recognised with OCR" in note for note in notes)
+    # The stop was the page cap, not the clock; the note used to say "time limit".
+    assert not any("time limit" in note for note in notes)
+    assert any("at most 1 scanned pages" in note for note in notes)
+    assert "Text on page(s) 1 was recognised with OCR; check it for errors." in notes
+
+
+def test_ocr_note_names_only_pages_that_yielded_text(client, monkeypatch):
+    from conversions import ocr
+
+    calls = []
+
+    def first_page_only(image):
+        calls.append(image.size)
+        return "RECOGNISED" if len(calls) == 1 else ""
+
+    monkeypatch.setattr(ocr, "recognize", first_page_only)
+    response = samples.convert(client, "scan.pdf", _scanned_pdf(pages=2), "txt")
+    assert response.status_code == 200
+    assert len(calls) == 2
+    # Two pages were attempted but only page 1 produced text.
+    assert "Text on page(s) 1 was recognised with OCR; check it for errors." in _notes(response)
 
 
 def test_ocr_time_budget_zero(client, monkeypatch):

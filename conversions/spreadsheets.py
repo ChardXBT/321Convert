@@ -16,6 +16,7 @@ _NUMERIC_VALUE = re.compile(r"^[-+]?\d+([.,]\d+)?$")
 _INT_VALUE = re.compile(r"^[-+]?\d+$")
 _FLOAT_VALUE = re.compile(r"^[-+]?(\d*\.\d+|\d+\.\d*)$")
 _FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+_EXCEL_DIGITS = 15  # Excel keeps 15 significant digits of any number
 
 
 def format_cell(value) -> str:
@@ -57,11 +58,24 @@ def _workbook(path: Path):
 
 
 def _sheet(workbook, name):
+    """The named worksheet, or the first worksheet when no name is given.
+
+    Only worksheets hold cells: chart sheets are skipped, so a workbook saved
+    with a chart tab active (or first) still converts. ``workbook.active`` is
+    deliberately not used — it can be a chart sheet, and the documented
+    default is the first sheet, not whichever tab was last selected.
+    """
+    worksheets = workbook.worksheets
     if name:
-        if name not in workbook.sheetnames:
-            raise ConversionError(f"The workbook has no sheet named “{name[:100]}”.")
-        return workbook[name]
-    return workbook.active
+        for worksheet in worksheets:
+            if worksheet.title == name:
+                return worksheet
+        if name in workbook.sheetnames:
+            raise ConversionError(f"“{name[:100]}” is a chart sheet and has no cells to convert.")
+        raise ConversionError(f"The workbook has no sheet named “{name[:100]}”.")
+    if not worksheets:
+        raise ConversionError("The workbook has no worksheets.")
+    return worksheets[0]
 
 
 def _iter_sheet(worksheet):
@@ -151,11 +165,22 @@ def _sheet_html(title: str, rows: list[list[str]]) -> str:
 
 
 def _csv_value(text: str):
-    if _INT_VALUE.match(text):
-        return int(text), False
-    if _FLOAT_VALUE.match(text):
-        return float(text), False
-    return text, True
+    """(value, is_text): a number only when converting it loses nothing.
+
+    Codes with leading zeros (ZIP codes, phone numbers, "007") and values with
+    more significant digits than Excel keeps (15: card, account and ID
+    numbers) stay literal text; storing them as numbers silently changed them.
+    """
+    is_int = bool(_INT_VALUE.match(text))
+    if not is_int and not _FLOAT_VALUE.match(text):
+        return text, True
+    whole, _, fraction = text.lstrip("+-").partition(".")
+    if len(whole) > 1 and whole.startswith("0"):
+        return text, True
+    significant = (whole + fraction.rstrip("0")).lstrip("0")
+    if len(significant) > _EXCEL_DIGITS:
+        return text, True
+    return (int(text), False) if is_int else (float(text), False)
 
 
 def csv_to_xlsx(input_path: Path, output_path: Path, options: dict) -> ConversionResult:

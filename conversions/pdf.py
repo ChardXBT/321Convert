@@ -66,7 +66,8 @@ def _ocr_pages(pdf_path: Path, candidates: list[int], notes: list[str]) -> dict[
 
     results = {}
     done = 0
-    stopped = len(candidates) > config.OCR_MAX_PAGES
+    capped = len(candidates) > config.OCR_MAX_PAGES
+    timed_out = False
     try:
         pdf = pdfium.PdfDocument(str(pdf_path))
     except pdfium.PdfiumError:
@@ -80,7 +81,7 @@ def _ocr_pages(pdf_path: Path, candidates: list[int], notes: list[str]) -> dict[
             if elapsed > config.OCR_TIME_BUDGET or (
                 done and elapsed + last_duration > config.OCR_TIME_BUDGET
             ):
-                stopped = True
+                timed_out = True
                 break
             page = pdf[index]
             try:
@@ -98,10 +99,16 @@ def _ocr_pages(pdf_path: Path, candidates: list[int], notes: list[str]) -> dict[
                 results[index] = text
     finally:
         pdf.close()
-    if stopped:
+    if timed_out:
         notes.append(f"OCR stopped after {done} page(s) to stay within the time limit.")
+    elif capped:
+        notes.append(
+            f"OCR stopped after {done} page(s): at most {config.OCR_MAX_PAGES} scanned pages "
+            "are recognised per file."
+        )
     if results:
-        notes.append(f"Text on {done} page(s) was recognised with OCR; check it for errors.")
+        pages = ", ".join(str(index + 1) for index in sorted(results))
+        notes.append(f"Text on page(s) {pages} was recognised with OCR; check it for errors.")
     return results
 
 

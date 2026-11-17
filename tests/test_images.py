@@ -109,6 +109,21 @@ def test_exif_orientation_rotates_and_strips_exif(client):
     assert not image.info.get("exif")
 
 
+@pytest.mark.parametrize("output", ["jpg", "png", "webp", "gif", "bmp", "tiff", "avif", "heic", "pdf"])
+def test_location_and_device_metadata_never_survive(client, output):
+    # pillow-heif re-embeds EXIF/XMP from the frame's own info, so HEIC
+    # output used to keep the camera model and GPS position.
+    response = samples.convert(client, "m.jpg", samples.jpeg_with_private_metadata(), output)
+    assert response.status_code == 200
+    raw = response.data
+    for marker in (b"SecretCam", b"GPSLatitude", b"SecretComment"):
+        assert marker not in raw, (output, marker)
+    if output != "pdf":
+        image = Image.open(io.BytesIO(raw))
+        assert not image.getexif().get_ifd(0x8825)
+        assert not image.info.get("xmp") and not image.info.get("exif")
+
+
 def test_icc_preserved_png_to_webp_not_cmyk(client):
     response = samples.convert(client, "icc.png", samples.png_with_icc(), "webp")
     assert response.status_code == 200
@@ -117,6 +132,23 @@ def test_icc_preserved_png_to_webp_not_cmyk(client):
     response = samples.convert(client, "c.jpg", samples.jpeg_cmyk(), "jpg")
     image = Image.open(io.BytesIO(response.data))
     assert not image.info.get("icc_profile")
+
+
+@pytest.mark.parametrize(
+    ("output", "kept"),
+    [("png", True), ("tiff", True), ("jpg", False), ("webp", False), ("avif", False), ("heic", False)],
+)
+def test_gray_icc_only_kept_on_gray_output(client, output, kept):
+    # LA -> JPG flattens to RGB and WebP/AVIF/HEIC always write RGB(A); those
+    # used to be tagged with the source's GRAY profile, an invalid pairing.
+    response = samples.convert(client, "g.png", samples.png_gray_alpha_with_gray_icc(), output)
+    assert response.status_code == 200
+    image = Image.open(io.BytesIO(response.data))
+    profile = image.info.get("icc_profile")
+    if kept:
+        assert profile and profile[16:20] == b"GRAY"
+    else:
+        assert not profile or profile[16:20] == b"RGB "
 
 
 def test_animated_gif_frames_preserved(client):

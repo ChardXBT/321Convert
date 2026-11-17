@@ -176,6 +176,39 @@ def png_with_icc() -> io.BytesIO:
     return buffer
 
 
+def jpeg_with_private_metadata() -> io.BytesIO:
+    """A JPEG carrying a camera model and GPS in EXIF, GPS in XMP and a comment."""
+    from PIL import Image
+
+    exif = Image.Exif()
+    exif[0x010F] = "SecretCam"  # Make
+    gps = exif.get_ifd(0x8825)
+    gps[1], gps[2] = "N", (51.0, 30.0, 0.0)
+    xmp = (
+        b'<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF '
+        b'xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description '
+        b'xmlns:exif="http://ns.adobe.com/exif/1.0/" exif:GPSLatitude="51,30.0N"/></rdf:RDF></x:xmpmeta>'
+    )
+    buffer = io.BytesIO()
+    Image.new("RGB", (40, 20), (10, 120, 200)).save(
+        buffer, "JPEG", exif=exif.tobytes(), xmp=xmp, comment=b"SecretComment"
+    )
+    buffer.seek(0)
+    return buffer
+
+
+def png_gray_alpha_with_gray_icc() -> io.BytesIO:
+    """An LA PNG tagged with a grayscale ICC profile (header colour space GRAY)."""
+    from PIL import Image, ImageCms
+
+    profile = bytearray(ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes())
+    profile[16:20] = b"GRAY"
+    buffer = io.BytesIO()
+    Image.new("LA", (8, 8), (128, 200)).save(buffer, "PNG", icc_profile=bytes(profile))
+    buffer.seek(0)
+    return buffer
+
+
 def bomb_png() -> io.BytesIO:
     """A PNG whose IHDR declares 30000x30000 pixels."""
 
@@ -246,6 +279,42 @@ def xlsx() -> io.BytesIO:
 
 def xlsx_two_sheets() -> io.BytesIO:
     return _xlsx_with({"First": [["k"], ["one"]], "Second": [["k"], ["two"]]})
+
+
+def xlsx_active_second_sheet() -> io.BytesIO:
+    """Two worksheets saved with the second tab selected."""
+    from openpyxl import Workbook
+
+    workbook = Workbook()
+    workbook.active.title = "First"
+    workbook.active.append(["one"])
+    workbook.create_sheet("Second").append(["two"])
+    workbook.active = 1
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+
+def xlsx_chart_sheet_first() -> io.BytesIO:
+    """A chart sheet as the first and active tab, data on a worksheet after it."""
+    from openpyxl import Workbook
+    from openpyxl.chart import BarChart, Reference
+
+    workbook = Workbook()
+    data = workbook.active
+    data.title = "Data"
+    for row in (["k"], ["one"], [2]):
+        data.append(row)
+    chart_sheet = workbook.create_chartsheet("Chart", 0)
+    chart = BarChart()
+    chart.add_data(Reference(data, min_col=1, min_row=3, max_row=3))
+    chart_sheet.add_chart(chart)
+    workbook.active = 0
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    buffer.seek(0)
+    return buffer
 
 
 def xlsx_formulas() -> io.BytesIO:
